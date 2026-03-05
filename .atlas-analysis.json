@@ -1,0 +1,136 @@
+{
+  "projectType": "api-service",
+  "projectName": "SAPFIAI",
+  "projectDescription": "Enterprise-grade ASP.NET Core 8.0 Clean Architecture API with advanced security, CQRS, and role-based access control",
+  "theme": "aspen",
+  "primaryColor": "#512BD4",
+  "lightColor": "#8B7EC8",
+  "darkColor": "#3A1F9D",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Architecture",
+            "pages": [
+              "architecture/overview",
+              "architecture/clean-architecture",
+              "architecture/project-structure",
+              "architecture/cqrs-pattern"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/authentication",
+              "concepts/authorization",
+              "concepts/roles-permissions",
+              "concepts/validation",
+              "concepts/error-handling"
+            ]
+          },
+          {
+            "group": "Development",
+            "pages": [
+              "development/creating-use-cases",
+              "development/database-migrations",
+              "development/testing",
+              "development/configuration"
+            ]
+          },
+          {
+            "group": "Security",
+            "pages": [
+              "security/jwt-authentication",
+              "security/two-factor-auth",
+              "security/ip-blocking",
+              "security/audit-logs"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/overview",
+              "deployment/smarterasp",
+              "deployment/cicd"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Authentication",
+            "pages": [
+              "api/authentication/register",
+              "api/authentication/login",
+              "api/authentication/logout",
+              "api/authentication/refresh-token",
+              "api/authentication/two-factor",
+              "api/authentication/password-reset"
+            ]
+          },
+          {
+            "group": "Roles & Permissions",
+            "pages": [
+              "api/roles/overview",
+              "api/roles/create",
+              "api/roles/assign",
+              "api/permissions/overview",
+              "api/permissions/manage"
+            ]
+          },
+          {
+            "group": "Security",
+            "pages": [
+              "api/security/audit-logs",
+              "api/security/ip-management",
+              "api/security/health-checks"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Clean Architecture with clear separation of concerns",
+    "CQRS pattern with MediatR for command/query separation",
+    "JWT authentication with refresh tokens and 2FA support",
+    "Role-Based Access Control (RBAC) with granular permissions",
+    "Advanced security features (IP blocking, audit logs, login attempts)",
+    "Entity Framework Core 8 with SQL Server support",
+    "FluentValidation for centralized validation logic",
+    "Comprehensive testing suite (unit, functional, integration)",
+    "OpenAPI/Swagger documentation with NSwag",
+    "Health checks and monitoring endpoints"
+  ],
+  "publicApiSurface": [
+    "POST /authentication/register - Register new user",
+    "POST /authentication/login - User login",
+    "POST /authentication/logout - User logout",
+    "POST /authentication/refresh-token - Refresh JWT token",
+    "POST /authentication/verify-2fa - Verify two-factor authentication",
+    "POST /authentication/forgot-password - Initiate password reset",
+    "POST /authentication/reset-password - Reset password",
+    "POST /authentication/enable-2fa - Enable two-factor authentication",
+    "GET /authentication/audit-logs - Get all audit logs",
+    "GET /authentication/audit-logs/user/{userId} - Get user audit logs",
+    "POST /roles/create - Create new role",
+    "POST /roles/assign - Assign role to user",
+    "GET /roles - Get all roles",
+    "POST /permissions/create - Create permission",
+    "POST /permissions/assign - Assign permission to role",
+    "GET /permissions - Get all permissions",
+    "GET /security/health - Health check endpoint"
+  ]
+}
