@@ -1,0 +1,524 @@
+---
+title: "Validation"
+description: "Centralized validation using FluentValidation with automatic request validation in the MediatR pipeline"
+---
+
+## Overview
+
+SAPFIAI uses **FluentValidation** to provide:
+
+- **Centralized Validation Logic** - All validation rules in dedicated validator classes
+- **Automatic Validation** - Integrated into the MediatR pipeline
+- **Clear Error Messages** - Descriptive validation failures
+- **Reusable Rules** - Share validation logic across commands and queries
+- **Testable Validators** - Easy to unit test validation rules
+
+<Info>
+  Validation occurs **before** command/query handlers execute, preventing invalid data from reaching your business logic.
+</Info>
+
+## FluentValidation Integration
+
+### MediatR Pipeline Behavior
+
+From `src/Application/Common/Behaviours/ValidationBehaviour.cs`:
+
+```csharp ValidationBehaviour.cs
+public class ValidationBehaviour<TRequest, TResponse> 
+    : IPipelineBehavior<TRequest, TResponse>
+    where TRequest : IRequest<TResponse>
+{
+    private readonly IEnumerable<IValidator<TRequest>> _validators;
+
+    public ValidationBehaviour(IEnumerable<IValidator<TRequest>> validators)
+    {
+        _validators = validators;
+    }
+
+    public async Task<TResponse> Handle(
+        TRequest request,
+        RequestHandlerDelegate<TResponse> next,
+        CancellationToken cancellationToken)
+    {
+        if (_validators.Any())
+        {
+            var context = new ValidationContext<TRequest>(request);
+
+            var validationResults = await Task.WhenAll(
+                _validators.Select(v => v.ValidateAsync(context, cancellationToken)));
+
+            var failures = validationResults
+                .SelectMany(r => r.Errors)
+                .Where(f => f != null)
+                .ToList();
+
+            if (failures.Count != 0)
+            {
+                throw new ValidationException(failures);
+            }
+        }
+
+        return await next();
+    }
+}
+```
+
+<Note>
+  The validation behavior runs for **every** MediatR request. If validators exist for a request type, they execute automatically.
+</Note>
+
+## Creating Validators
+
+### Basic Validator Example
+
+From `src/Application/Permissions/Commands/CreatePermission/CreatePermissionCommandValidator.cs:4`:
+
+```csharp CreatePermissionCommandValidator.cs lines
+public class CreatePermissionCommandValidator : AbstractValidator<CreatePermissionCommand>
+{
+    public CreatePermissionCommandValidator()
+    {
+        RuleFor(x => x.Name)
+            .NotEmpty().WithMessage("El nombre del permiso es requerido")
+            .MaximumLength(100).WithMessage("El nombre no puede exceder 100 caracteres")
+            .Matches("^[a-z0-9._-]+$").WithMessage("Use formato: modulo.accion (ej: users.create)");
+
+        RuleFor(x => x.Module)
+            .NotEmpty().WithMessage("El módulo es requerido")
+            .MaximumLength(50).WithMessage("El módulo no puede exceder 50 caracteres");
+
+        RuleFor(x => x.Description)
+            .MaximumLength(500).WithMessage("La descripción no puede exceder 500 caracteres")
+            .When(x => !string.IsNullOrEmpty(x.Description));
+    }
+}
+```
+
+### Validator Structure
+
+<Steps>
+  <Step title="Inherit from AbstractValidator<T>">
+    ```csharp
+    public class RegisterCommandValidator : AbstractValidator<RegisterCommand>
+    {
+        // Validation rules in constructor
+    }
+    ```
+  </Step>
+
+  <Step title="Define rules in constructor">
+    ```csharp
+    public RegisterCommandValidator()
+    {
+        RuleFor(x => x.Email)
+            .NotEmpty()
+            .EmailAddress();
+    }
+    ```
+  </Step>
+
+  <Step title="Add custom error messages">
+    ```csharp
+    RuleFor(x => x.Password)
+        .NotEmpty().WithMessage("Password is required")
+        .MinimumLength(8).WithMessage("Password must be at least 8 characters");
+    ```
+  </Step>
+
+  <Step title="Register in DependencyInjection">
+    ```csharp
+    services.AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());
+    ```
+    <Info>
+      This automatically discovers and registers all validators in the assembly
+    </Info>
+  </Step>
+</Steps>
+
+## Built-in Validators
+
+FluentValidation provides many built-in validators:
+
+### String Validators
+
+```csharp
+// Not null or empty
+RuleFor(x => x.Name).NotEmpty();
+
+// Length constraints
+RuleFor(x => x.Username)
+    .MinimumLength(3)
+    .MaximumLength(50);
+
+// Length range
+RuleFor(x => x.Description).Length(10, 500);
+
+// Regular expression
+RuleFor(x => x.PhoneNumber)
+    .Matches(@"^\d{10}$")
+    .WithMessage("Phone must be 10 digits");
+
+// Email address
+RuleFor(x => x.Email).EmailAddress();
+```
+
+### Numeric Validators
+
+```csharp
+// Comparison
+RuleFor(x => x.Age).GreaterThan(0);
+RuleFor(x => x.Quantity).LessThanOrEqualTo(100);
+
+// Range
+RuleFor(x => x.Rating)
+    .InclusiveBetween(1, 5);
+
+// Precision
+RuleFor(x => x.Price)
+    .PrecisionScale(10, 2, true); // 10 digits, 2 decimals
+```
+
+### Collection Validators
+
+```csharp
+// Not empty collection
+RuleFor(x => x.Tags).NotEmpty();
+
+// Collection size
+RuleFor(x => x.Items)
+    .Must(items => items.Count >= 1 && items.Count <= 10)
+    .WithMessage("Must have 1-10 items");
+
+// Validate each item
+RuleForEach(x => x.Emails)
+    .EmailAddress();
+```
+
+## Complex Validation Rules
+
+### Conditional Validation
+
+```csharp
+// Only validate if condition is true
+RuleFor(x => x.CompanyName)
+    .NotEmpty()
+    .When(x => x.IsBusinessAccount);
+
+// Unless (inverse of When)
+RuleFor(x => x.ParentId)
+    .NotEmpty()
+    .Unless(x => x.IsRootCategory);
+```
+
+### Cross-Property Validation
+
+```csharp
+public class UpdateUserCommandValidator : AbstractValidator<UpdateUserCommand>
+{
+    public UpdateUserCommandValidator()
+    {
+        // Password confirmation must match
+        RuleFor(x => x.PasswordConfirmation)
+            .Equal(x => x.Password)
+            .When(x => !string.IsNullOrEmpty(x.Password))
+            .WithMessage("Password confirmation must match password");
+
+        // End date must be after start date
+        RuleFor(x => x.EndDate)
+            .GreaterThan(x => x.StartDate)
+            .When(x => x.EndDate.HasValue)
+            .WithMessage("End date must be after start date");
+    }
+}
+```
+
+### Custom Validation Rules
+
+```csharp
+public class CreateUserCommandValidator : AbstractValidator<CreateUserCommand>
+{
+    private readonly IApplicationDbContext _context;
+
+    public CreateUserCommandValidator(IApplicationDbContext context)
+    {
+        _context = context;
+
+        RuleFor(x => x.Email)
+            .NotEmpty()
+            .EmailAddress()
+            .MustAsync(BeUniqueEmail)
+            .WithMessage("Email address already exists");
+    }
+
+    private async Task<bool> BeUniqueEmail(string email, CancellationToken cancellationToken)
+    {
+        return !await _context.Users
+            .AnyAsync(u => u.Email == email, cancellationToken);
+    }
+}
+```
+
+<Warning>
+  Use `MustAsync` for async validation rules that access databases or external services.
+</Warning>
+
+## Password Validation Example
+
+### Complex Password Rules
+
+From `src/Application/Users/Commands/Register/RegisterCommandValidator.cs`:
+
+```csharp RegisterCommandValidator.cs
+public class RegisterCommandValidator : AbstractValidator<RegisterCommand>
+{
+    public RegisterCommandValidator()
+    {
+        RuleFor(x => x.Email)
+            .NotEmpty().WithMessage("Email is required")
+            .EmailAddress().WithMessage("Invalid email format")
+            .MaximumLength(256).WithMessage("Email cannot exceed 256 characters");
+
+        RuleFor(x => x.Password)
+            .NotEmpty().WithMessage("Password is required")
+            .MinimumLength(8).WithMessage("Password must be at least 8 characters")
+            .Matches(@"[A-Z]").WithMessage("Password must contain at least one uppercase letter")
+            .Matches(@"[a-z]").WithMessage("Password must contain at least one lowercase letter")
+            .Matches(@"[0-9]").WithMessage("Password must contain at least one number")
+            .Matches(@"[^a-zA-Z0-9]").WithMessage("Password must contain at least one special character");
+
+        RuleFor(x => x.Username)
+            .NotEmpty().WithMessage("Username is required")
+            .MinimumLength(3).WithMessage("Username must be at least 3 characters")
+            .MaximumLength(50).WithMessage("Username cannot exceed 50 characters")
+            .Matches(@"^[a-zA-Z0-9_-]+$").WithMessage("Username can only contain letters, numbers, underscores, and hyphens");
+
+        RuleFor(x => x.PhoneNumber)
+            .Matches(@"^\+?[1-9]\d{1,14}$")
+            .When(x => !string.IsNullOrEmpty(x.PhoneNumber))
+            .WithMessage("Phone number must be in valid E.164 format");
+    }
+}
+```
+
+## Validation Error Responses
+
+### Error Structure
+
+When validation fails, the API returns a `400 Bad Request` with:
+
+```json
+{
+  "type": "https://tools.ietf.org/html/rfc7231#section-6.5.1",
+  "title": "One or more validation errors occurred.",
+  "status": 400,
+  "errors": {
+    "Email": [
+      "Email is required",
+      "Invalid email format"
+    ],
+    "Password": [
+      "Password must be at least 8 characters",
+      "Password must contain at least one uppercase letter"
+    ]
+  }
+}
+```
+
+### Custom Exception Handler
+
+From `src/Web/Infrastructure/CustomExceptionHandler.cs:36`:
+
+```csharp CustomExceptionHandler.cs
+private async Task HandleValidationException(HttpContext httpContext, Exception ex)
+{
+    var exception = (ValidationException)ex;
+
+    httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+
+    await httpContext.Response.WriteAsJsonAsync(new ValidationProblemDetails(exception.Errors)
+    {
+        Status = StatusCodes.Status400BadRequest,
+        Type = "https://tools.ietf.org/html/rfc7231#section-6.5.1"
+    });
+}
+```
+
+## Testing Validators
+
+### Unit Testing Example
+
+```csharp
+public class CreatePermissionCommandValidatorTests
+{
+    private readonly CreatePermissionCommandValidator _validator;
+
+    public CreatePermissionCommandValidatorTests()
+    {
+        _validator = new CreatePermissionCommandValidator();
+    }
+
+    [Test]
+    public void Should_Have_Error_When_Name_Is_Empty()
+    {
+        // Arrange
+        var command = new CreatePermissionCommand { Name = "" };
+
+        // Act
+        var result = _validator.TestValidate(command);
+
+        // Assert
+        result.ShouldHaveValidationErrorFor(x => x.Name)
+            .WithErrorMessage("El nombre del permiso es requerido");
+    }
+
+    [Test]
+    public void Should_Have_Error_When_Name_Format_Is_Invalid()
+    {
+        // Arrange
+        var command = new CreatePermissionCommand { Name = "Invalid Name!" };
+
+        // Act
+        var result = _validator.TestValidate(command);
+
+        // Assert
+        result.ShouldHaveValidationErrorFor(x => x.Name)
+            .WithErrorMessage("Use formato: modulo.accion (ej: users.create)");
+    }
+
+    [Test]
+    public void Should_Not_Have_Error_When_Command_Is_Valid()
+    {
+        // Arrange
+        var command = new CreatePermissionCommand
+        {
+            Name = "users.create",
+            Module = "Users",
+            Description = "Create new users"
+        };
+
+        // Act
+        var result = _validator.TestValidate(command);
+
+        // Assert
+        result.ShouldNotHaveAnyValidationErrors();
+    }
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Validation Placement">
+    - Place validation in the Application layer, not the Domain
+    - Create one validator per command/query
+    - Name validators consistently: `{CommandName}Validator`
+    - Keep validators focused on input validation, not business rules
+  </Accordion>
+
+  <Accordion title="Error Messages">
+    - Provide clear, actionable error messages
+    - Include what's wrong and how to fix it
+    - Use consistent language across validators
+    - Consider internationalization for multi-language support
+  </Accordion>
+
+  <Accordion title="Performance">
+    - Use `When` conditions to avoid unnecessary validation
+    - Minimize database queries in validators
+    - Cache validator instances when possible
+    - Consider validation complexity for high-throughput APIs
+  </Accordion>
+
+  <Accordion title="Testing">
+    - Test both valid and invalid scenarios
+    - Test edge cases (null, empty, boundary values)
+    - Test conditional validation paths
+    - Use FluentValidation's TestHelper methods
+  </Accordion>
+</AccordionGroup>
+
+## Advanced Scenarios
+
+### Reusable Validation Rules
+
+```csharp
+public static class CommonValidators
+{
+    public static IRuleBuilderOptions<T, string> MustBeValidPermissionName<T>(
+        this IRuleBuilder<T, string> ruleBuilder)
+    {
+        return ruleBuilder
+            .NotEmpty().WithMessage("Permission name is required")
+            .Matches("^[a-z0-9._-]+$").WithMessage("Use format: module.action (e.g., users.create)")
+            .MaximumLength(100).WithMessage("Permission name cannot exceed 100 characters");
+    }
+}
+
+// Usage
+RuleFor(x => x.Name).MustBeValidPermissionName();
+```
+
+### Cascade Mode
+
+```csharp
+public class UserValidator : AbstractValidator<User>
+{
+    public UserValidator()
+    {
+        // Stop validating Email after first failure
+        RuleFor(x => x.Email)
+            .Cascade(CascadeMode.Stop)
+            .NotEmpty()
+            .EmailAddress()
+            .MustAsync(BeUniqueEmail); // Only runs if previous rules pass
+    }
+}
+```
+
+### Rule Sets
+
+```csharp
+public class CustomerValidator : AbstractValidator<Customer>
+{
+    public CustomerValidator()
+    {
+        // Default rules (always run)
+        RuleFor(x => x.Name).NotEmpty();
+
+        // Rules for "Create" scenario
+        RuleSet("Create", () =>
+        {
+            RuleFor(x => x.Email).NotEmpty().EmailAddress();
+        });
+
+        // Rules for "Update" scenario
+        RuleSet("Update", () =>
+        {
+            RuleFor(x => x.Id).NotEmpty();
+        });
+    }
+}
+
+// Invoke specific rule set
+var result = await validator.ValidateAsync(customer, options =>
+{
+    options.IncludeRuleSets("Create");
+});
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/concepts/error-handling">
+    Learn how validation exceptions are handled globally
+  </Card>
+  <Card title="Testing" icon="flask-vial" href="/development/testing">
+    Write tests for your validators
+  </Card>
+  <Card title="CQRS Pattern" icon="arrows-split-up-and-left" href="/architecture/cqrs-pattern">
+    Understand how validation integrates with CQRS
+  </Card>
+  <Card title="Creating Use Cases" icon="code" href="/development/creating-use-cases">
+    Learn to create commands and queries with validation
+  </Card>
+</CardGroup>

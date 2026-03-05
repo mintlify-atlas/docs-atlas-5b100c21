@@ -1,0 +1,191 @@
+---
+title: 'Permissions API Overview'
+description: 'Manage permissions and assign them to roles in the SAPFIAI system'
+---
+
+## Overview
+
+The Permissions API provides endpoints to create, manage, and assign permissions to roles. Permissions define fine-grained access control for specific actions and resources within the application.
+
+## Authentication
+
+All Permissions endpoints require the **Administrator** role. You must include a valid JWT token in the Authorization header:
+
+```
+Authorization: Bearer <your-token>
+```
+
+## Base URL
+
+```
+/api/Permissions
+```
+
+## Available Endpoints
+
+### Permission Management
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/Permissions` | Get all permissions |
+| GET | `/api/Permissions/{permissionId}` | Get a specific permission by ID |
+| POST | `/api/Permissions` | Create a new permission |
+| PUT | `/api/Permissions/{permissionId}` | Update an existing permission |
+| DELETE | `/api/Permissions/{permissionId}` | Delete a permission |
+
+### Permission Assignment
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/Permissions/role/{roleId}` | Get all permissions for a role |
+| POST | `/api/Permissions/assign` | Assign a permission to a role |
+| POST | `/api/Permissions/remove` | Remove a permission from a role |
+
+## Permission Entity Structure
+
+Permissions in the system have the following structure:
+
+<ResponseField name="id" type="integer" required>
+  Unique identifier for the permission
+</ResponseField>
+
+<ResponseField name="name" type="string" required>
+  Unique name of the permission (e.g., "users.create", "reports.view")
+</ResponseField>
+
+<ResponseField name="description" type="string">
+  Human-readable description of what the permission allows
+</ResponseField>
+
+<ResponseField name="module" type="string" required>
+  Module or feature area this permission belongs to (e.g., "Users", "Reports", "Settings")
+</ResponseField>
+
+<ResponseField name="isActive" type="boolean" required>
+  Whether the permission is currently active and can be used
+</ResponseField>
+
+<ResponseField name="createdAt" type="string" required>
+  ISO 8601 timestamp when the permission was created
+</ResponseField>
+
+## Permission Naming Convention
+
+Permissions follow a hierarchical naming convention:
+
+```
+{module}.{action}
+```
+
+Examples:
+- `users.create` - Create users
+- `users.read` - View users
+- `users.update` - Update users
+- `users.delete` - Delete users
+- `reports.view` - View reports
+- `reports.export` - Export reports
+- `settings.manage` - Manage system settings
+
+## Example Response
+
+```json
+{
+  "id": 1,
+  "name": "users.create",
+  "description": "Allows creating new users in the system",
+  "module": "Users",
+  "isActive": true,
+  "createdAt": "2024-01-15T10:30:00Z"
+}
+```
+
+## Role-Permission Relationship
+
+Permissions are assigned to roles through the `RolePermission` entity:
+
+<ResponseField name="roleId" type="string" required>
+  ID of the role
+</ResponseField>
+
+<ResponseField name="permissionId" type="integer" required>
+  ID of the permission
+</ResponseField>
+
+<ResponseField name="assignedAt" type="string" required>
+  ISO 8601 timestamp when the permission was assigned to the role
+</ResponseField>
+
+<ResponseField name="assignedBy" type="string">
+  User ID of the administrator who assigned the permission
+</ResponseField>
+
+## Filtering Permissions
+
+The GET `/api/Permissions` endpoint supports filtering:
+
+<ParamField query="activeOnly" type="boolean" default="false">
+  When set to `true`, returns only active permissions
+</ParamField>
+
+Example:
+```
+GET /api/Permissions?activeOnly=true
+```
+
+## Permission Modules
+
+Permissions are organized into modules for better management:
+
+- **Users** - User management permissions
+- **Roles** - Role management permissions
+- **Permissions** - Permission management permissions
+- **Reports** - Reporting and analytics permissions
+- **Settings** - System configuration permissions
+- **Documents** - Document management permissions
+- **Audit** - Audit log access permissions
+
+## Error Responses
+
+All endpoints may return the following error responses:
+
+- **400 Bad Request** - Invalid request parameters
+- **401 Unauthorized** - Missing or invalid authentication token
+- **403 Forbidden** - User does not have Administrator role
+- **404 Not Found** - Permission not found
+- **409 Conflict** - Permission name already exists (for create)
+- **500 Internal Server Error** - Server error
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Principle of Least Privilege">
+    Only assign permissions that are necessary for a role's function. Start with minimal permissions and add more as needed.
+  </Accordion>
+  
+  <Accordion title="Use Descriptive Names">
+    Permission names should clearly describe what they allow. Use the module.action convention for consistency.
+  </Accordion>
+  
+  <Accordion title="Group Related Permissions">
+    Organize permissions by module to make them easier to manage and understand.
+  </Accordion>
+  
+  <Accordion title="Document Permission Purpose">
+    Always provide clear descriptions for permissions so administrators understand what they control.
+  </Accordion>
+  
+  <Accordion title="Regular Permission Audits">
+    Periodically review role-permission assignments to ensure they're still appropriate and remove unnecessary access.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Manage Permissions" icon="shield" href="/api/permissions/manage">
+    Create, update, and delete permissions
+  </Card>
+  <Card title="Assign to Roles" icon="user-shield" href="/api/permissions/assign">
+    Assign permissions to roles
+  </Card>
+</CardGroup>

@@ -1,122 +1,122 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "SAPFIAI",
+  "theme": "aspen",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#512BD4",
+    "light": "#8B7EC8",
+    "dark": "#3A1F9D"
   },
   "favicon": "/favicon.svg",
-  "navigation": {
-    "tabs": [
-      {
-        "tab": "Guides",
-        "groups": [
-          {
-            "group": "Getting started",
-            "pages": [
-              "index",
-              "quickstart",
-              "development"
-            ]
-          },
-          {
-            "group": "Customization",
-            "pages": [
-              "essentials/settings",
-              "essentials/navigation"
-            ]
-          },
-          {
-            "group": "Writing content",
-            "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
-            ]
-          },
-          {
-            "group": "AI tools",
-            "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
-            ]
-          }
-        ]
-      },
-      {
-        "tab": "API reference",
-        "groups": [
-          {
-            "group": "API documentation",
-            "pages": [
-              "api-reference/introduction"
-            ]
-          },
-          {
-            "group": "Endpoint examples",
-            "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
-            ]
-          }
-        ]
-      }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
   "logo": {
     "light": "/logo/light.svg",
     "dark": "/logo/dark.svg"
   },
   "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
     "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
+      "type": "github",
+      "href": "https://github.com/JonathanArroyaveGonzalez/SistemaFinancieroUcaldas_Backend"
     }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
   },
   "footer": {
     "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
+      "github": "https://github.com/JonathanArroyaveGonzalez/SistemaFinancieroUcaldas_Backend"
     }
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Architecture",
+            "pages": [
+              "architecture/overview",
+              "architecture/clean-architecture",
+              "architecture/project-structure",
+              "architecture/cqrs-pattern"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/authentication",
+              "concepts/authorization",
+              "concepts/roles-permissions",
+              "concepts/validation",
+              "concepts/error-handling"
+            ]
+          },
+          {
+            "group": "Development",
+            "pages": [
+              "development/creating-use-cases",
+              "development/database-migrations",
+              "development/testing",
+              "development/configuration"
+            ]
+          },
+          {
+            "group": "Security",
+            "pages": [
+              "security/jwt-authentication",
+              "security/two-factor-auth",
+              "security/ip-blocking",
+              "security/audit-logs"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/overview",
+              "deployment/smarterasp",
+              "deployment/cicd"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Authentication",
+            "pages": [
+              "api/authentication/register",
+              "api/authentication/login",
+              "api/authentication/logout",
+              "api/authentication/refresh-token",
+              "api/authentication/two-factor",
+              "api/authentication/password-reset"
+            ]
+          },
+          {
+            "group": "Roles & Permissions",
+            "pages": [
+              "api/roles/overview",
+              "api/roles/create",
+              "api/roles/assign",
+              "api/permissions/overview",
+              "api/permissions/manage"
+            ]
+          },
+          {
+            "group": "Security",
+            "pages": [
+              "api/security/audit-logs",
+              "api/security/ip-management",
+              "api/security/health-checks"
+            ]
+          }
+        ]
+      }
+    ]
   }
 }

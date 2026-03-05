@@ -1,80 +1,416 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart Guide
+description: Get your SAPFIAI API running in under 5 minutes
 ---
 
-## Get started in three steps
+This quickstart guide will help you get a SAPFIAI API instance up and running locally in just a few minutes.
 
-Get your documentation site running locally and make your first customization.
+## Prerequisites Check
 
-### Step 1: Set up your local environment
+Before starting, verify you have the required tools:
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+<Steps>
+  <Step title="Verify .NET 8.0 SDK">
+    Open a terminal and check your .NET version:
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+    ```bash
+    dotnet --version
+    ```
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
+    You should see version `8.0.x` or higher. If not, [download .NET 8.0 SDK](https://dotnet.microsoft.com/download/dotnet/8.0).
+  </Step>
+  
+  <Step title="Verify SQL Server">
+    Check if SQL Server LocalDB is available:
     
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
+    ```bash
+    sqllocaldb info
+    ```
+    
+    If you see `MSSQLLocalDB` in the list, you're ready. Otherwise, install [SQL Server Express](https://www.microsoft.com/en-us/sql-server/sql-server-downloads) or use SQLite instead.
+    
+    <Accordion title="Using SQLite Instead">
+      If you prefer SQLite over SQL Server, update the connection string in `src/Web/appsettings.json`:
+      
+      ```json
+      {
+        "ConnectionStrings": {
+          "DefaultConnection": "Data Source=sapfiai.db"
+        }
+      }
+      ```
+      
+      The application will automatically detect and use SQLite.
+    </Accordion>
+  </Step>
+</Steps>
+
+## Quick Start Steps
+
+<Steps>
+  <Step title="Clone the Repository">
+    Clone the SAPFIAI repository to your local machine:
+    
+    ```bash
+    git clone <repository-url>
+    cd SAPFIAI
+    ```
+    
+    Replace `<repository-url>` with your actual repository URL.
+  </Step>
+  
+  <Step title="Restore Dependencies">
+    Restore all NuGet packages:
+    
+    ```bash
+    dotnet restore
+    ```
+    
+    This will download all required dependencies for the solution.
+  </Step>
+  
+  <Step title="Configure Database Connection (Optional)">
+    The default configuration uses SQL Server LocalDB. If you want to customize:
+    
+    Open `src/Web/appsettings.json` and update the connection string:
+    
+    ```json
+    {
+      "ConnectionStrings": {
+        "DefaultConnection": "Server=(localdb)\\mssqllocaldb;Database=SAPFIAIDb;Trusted_Connection=true;MultipleActiveResultSets=true"
+      }
+    }
+    ```
+    
+    <CodeGroup>
+      ```json SQL Server LocalDB (Default)
+      {
+        "ConnectionStrings": {
+          "DefaultConnection": "Server=(localdb)\\mssqllocaldb;Database=SAPFIAIDb;Trusted_Connection=true;MultipleActiveResultSets=true"
+        }
+      }
+      ```
+      
+      ```json SQL Server Express
+      {
+        "ConnectionStrings": {
+          "DefaultConnection": "Server=localhost\\SQLEXPRESS;Database=SAPFIAIDb;Trusted_Connection=true;MultipleActiveResultSets=true"
+        }
+      }
+      ```
+      
+      ```json SQLite
+      {
+        "ConnectionStrings": {
+          "DefaultConnection": "Data Source=sapfiai.db"
+        }
+      }
+      ```
+    </CodeGroup>
+  </Step>
+  
+  <Step title="Apply Database Migrations">
+    Create and initialize the database:
+    
+    ```bash
+    dotnet ef database update --project src/Infrastructure --startup-project src/Web
+    ```
+    
+    This will:
+    - Create the database if it doesn't exist
+    - Apply all pending migrations
+    - Set up the schema with all required tables
+    
+    <Note>
+      If you encounter an error, make sure the EF Core tools are installed:
+      ```bash
+      dotnet tool install --global dotnet-ef
+      ```
+    </Note>
+  </Step>
+  
+  <Step title="Configure JWT Secret (Important)">
+    <Warning>
+      The default JWT secret is insecure. Change it before running the application!
+    </Warning>
+    
+    Update the JWT configuration in `src/Web/appsettings.json`:
+    
+    ```json
+    {
+      "Jwt": {
+        "Key": "YOUR-SUPER-SECRET-KEY-AT-LEAST-32-CHARACTERS-LONG",
+        "Issuer": "SAPFIAI",
+        "Audience": "SAPFIAI-Users",
+        "ExpireMinutes": "60"
+      }
+    }
+    ```
+    
+    <Tip>
+      For production, use environment variables or user secrets instead of storing keys in `appsettings.json`.
+    </Tip>
+  </Step>
+  
+  <Step title="Run the Application">
+    Start the API server:
+    
+    ```bash
+    dotnet run --project src/Web
+    ```
+    
+    You should see output similar to:
+    
+    ```
+    info: Microsoft.Hosting.Lifetime[14]
+          Now listening on: https://localhost:5001
+    info: Microsoft.Hosting.Lifetime[14]
+          Now listening on: http://localhost:5000
+    info: Microsoft.Hosting.Lifetime[0]
+          Application started. Press Ctrl+C to shut down.
+    ```
+  </Step>
+  
+  <Step title="Access the API">
+    Open your browser and navigate to:
+    
+    <CardGroup cols={2}>
+      <Card title="Swagger UI" icon="book-open" href="https://localhost:5001/api">
+        Interactive API documentation
+      </Card>
+      
+      <Card title="Health Check" icon="heart-pulse" href="https://localhost:5001/health">
+        Verify the API is running
+      </Card>
+    </CardGroup>
+    
+    You should see the Swagger UI with all available endpoints.
+  </Step>
+</Steps>
+
+## Testing the API
+
+Let's test the API by registering a new user and logging in.
+
+### 1. Register a New User
+
+Using the Swagger UI or cURL:
+
+```bash
+curl -X POST https://localhost:5001/api/Authentication/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "test@example.com",
+    "password": "Test123!@#",
+    "confirmPassword": "Test123!@#",
+    "userName": "testuser"
+  }'
+```
+
+<Accordion title="Expected Response">
+  ```json
+  {
+    "success": true,
+    "userId": "abc123-def456-ghi789",
+    "message": "Usuario registrado exitosamente"
+  }
+  ```
 </Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+### 2. Login
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+Authenticate with the newly created user:
 
-### Step 3: Go live
+```bash
+curl -X POST https://localhost:5001/api/Authentication/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "test@example.com",
+    "password": "Test123!@#"
+  }'
+```
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
+<Accordion title="Expected Response">
+  ```json
+  {
+    "success": true,
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "refreshToken": "xW3k9pLmN7vQ2rT8yU4jK5sF1hG6dA0zC...",
+    "refreshTokenExpiry": "2026-03-12T10:30:00Z",
+    "user": {
+      "id": "abc123-def456-ghi789",
+      "userName": "testuser",
+      "email": "test@example.com"
+    },
+    "requires2FA": false
+  }
+  ```
 </Accordion>
 
-## Next steps
+### 3. Make an Authenticated Request
 
-Now that you have your docs running, explore these key features:
+Use the token from the login response to make authenticated requests:
+
+```bash
+curl -X GET https://localhost:5001/api/Permissions \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+```
+
+<Tip>
+  Copy the `token` value from the login response and paste it into Swagger UI by clicking the **Authorize** button at the top right.
+</Tip>
+
+## Exploring the Project Structure
+
+Now that your API is running, let's explore the project structure:
+
+```
+SAPFIAI/
+├── src/
+│   ├── Domain/              # Core business logic and entities
+│   │   ├── Entities/        # Domain entities (User, Permission, etc.)
+│   │   ├── Enums/           # Domain enumerations
+│   │   └── ValueObjects/    # Value objects
+│   │
+│   ├── Application/         # Use cases and business rules
+│   │   ├── Users/           # User-related commands/queries
+│   │   │   ├── Commands/    # Write operations (Login, Register)
+│   │   │   └── Queries/     # Read operations (GetUser)
+│   │   ├── Permissions/     # Permission management
+│   │   ├── Roles/           # Role management
+│   │   └── Security/        # Security operations
+│   │
+│   ├── Infrastructure/      # External concerns
+│   │   ├── Data/            # EF Core DbContext and configurations
+│   │   ├── Services/        # Service implementations
+│   │   ├── Identity/        # ASP.NET Identity configuration
+│   │   └── BackgroundJobs/  # Scheduled tasks
+│   │
+│   └── Web/                 # API presentation layer
+│       ├── Endpoints/       # Minimal API endpoints
+│       ├── Middleware/      # Custom middleware
+│       └── Program.cs       # Application entry point
+│
+├── tests/                   # Test projects
+│   ├── Application.UnitTests/
+│   ├── Application.FunctionalTests/
+│   ├── Domain.UnitTests/
+│   └── Infrastructure.IntegrationTests/
+│
+└── docs/                    # Documentation
+```
+
+## Next Steps
+
+Congratulations! You now have a running SAPFIAI API instance. Here's what to explore next:
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Installation Guide" icon="download" href="/installation">
+    Detailed installation and configuration options
+  </Card>
+  
+  <Card title="Authentication" icon="shield" href="/api/authentication/login">
+    Learn about all authentication endpoints
+  </Card>
+  
+  <Card title="Architecture" icon="sitemap" href="/architecture/overview">
+    Understand the Clean Architecture layers
+  </Card>
+  
+  <Card title="Creating Use Cases" icon="code" href="/guides/creating-use-cases">
+    Learn how to add new features using CQRS
+  </Card>
 </CardGroup>
 
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
+## Common Issues
+
+<Accordion title="Port Already in Use">
+  If ports 5000 or 5001 are already in use, you can change them in `src/Web/Properties/launchSettings.json`:
+  
+  ```json
+  {
+    "profiles": {
+      "https": {
+        "commandName": "Project",
+        "dotnetRunMessages": true,
+        "launchBrowser": true,
+        "applicationUrl": "https://localhost:7001;http://localhost:7000",
+        "environmentVariables": {
+          "ASPNETCORE_ENVIRONMENT": "Development"
+        }
+      }
+    }
+  }
+  ```
+</Accordion>
+
+<Accordion title="Database Connection Failed">
+  If you can't connect to the database:
+  
+  1. Verify SQL Server LocalDB is running:
+     ```bash
+     sqllocaldb info
+     sqllocaldb start MSSQLLocalDB
+     ```
+  
+  2. Try using SQLite instead by changing the connection string to:
+     ```json
+     "DefaultConnection": "Data Source=sapfiai.db"
+     ```
+</Accordion>
+
+<Accordion title="EF Core Tools Not Found">
+  If `dotnet ef` commands don't work:
+  
+  ```bash
+  dotnet tool install --global dotnet-ef
+  dotnet tool update --global dotnet-ef
+  ```
+  
+  Then restart your terminal and try again.
+</Accordion>
+
+<Accordion title="SSL Certificate Errors">
+  If you see SSL certificate errors in your browser:
+  
+  ```bash
+  dotnet dev-certs https --trust
+  ```
+  
+  This will install and trust the development certificate.
+</Accordion>
+
+## Running Tests
+
+To verify everything is working correctly, run the test suite:
+
+```bash
+# Run all tests
+dotnet test
+
+# Run with code coverage
+dotnet test /p:CollectCoverage=true /p:CoverageReportFormat=opencover
+```
+
+All tests should pass if the setup is correct.
+
+## Development Tips
+
+<Tip>
+  **Hot Reload**: Use `dotnet watch` for automatic recompilation on file changes:
+  ```bash
+  dotnet watch run --project src/Web
+  ```
+</Tip>
+
+<Tip>
+  **Swagger in Production**: By default, Swagger is only enabled in Development. To enable it in other environments, modify the Swagger configuration in `src/Web/DependencyInjection.cs`.
+</Tip>
+
+<Tip>
+  **Database Reset**: To reset the database and start fresh:
+  ```bash
+  dotnet ef database drop --project src/Infrastructure --startup-project src/Web
+  dotnet ef database update --project src/Infrastructure --startup-project src/Web
+  ```
+</Tip>

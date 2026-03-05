@@ -1,0 +1,102 @@
+---
+title: 'Roles API Overview'
+description: 'Manage user roles and role assignments in the SAPFIAI system'
+---
+
+## Overview
+
+The Roles API provides endpoints to create, manage, and assign roles to users. Roles are used to group permissions and control access to different parts of the application.
+
+## Authentication
+
+All Roles endpoints require the **Administrator** role. You must include a valid JWT token in the Authorization header:
+
+```
+Authorization: Bearer <your-token>
+```
+
+## Base URL
+
+```
+/api/Roles
+```
+
+## Available Endpoints
+
+### Role Management
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/Roles` | Get all roles |
+| GET | `/api/Roles/{roleId}` | Get a specific role by ID |
+| POST | `/api/Roles` | Create a new role |
+| PUT | `/api/Roles/{roleId}` | Update an existing role |
+| DELETE | `/api/Roles/{roleId}` | Delete a role |
+
+### Role Assignment
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/Roles/user/{userId}` | Get all roles assigned to a user |
+| POST | `/api/Roles/assign` | Assign a role to a user |
+| POST | `/api/Roles/remove` | Remove a role from a user |
+
+## Role Entity Structure
+
+Roles in the system have the following structure:
+
+<ResponseField name="id" type="string" required>
+  Unique identifier for the role
+</ResponseField>
+
+<ResponseField name="name" type="string" required>
+  Name of the role (e.g., "Administrator", "User", "Manager")
+</ResponseField>
+
+<ResponseField name="normalizedName" type="string">
+  Normalized version of the role name (uppercase)
+</ResponseField>
+
+<ResponseField name="permissionCount" type="integer">
+  Number of permissions assigned to this role
+</ResponseField>
+
+## Predefined Roles
+
+The system includes the following predefined roles:
+
+- **Administrator** - Full system access
+- **User** - Standard user access
+- **Manager** - Management-level access
+
+## Example Response
+
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "name": "Administrator",
+  "normalizedName": "ADMINISTRATOR",
+  "permissionCount": 15
+}
+```
+
+## Error Responses
+
+All endpoints may return the following error responses:
+
+- **400 Bad Request** - Invalid request parameters
+- **401 Unauthorized** - Missing or invalid authentication token
+- **403 Forbidden** - User does not have Administrator role
+- **404 Not Found** - Role not found
+- **500 Internal Server Error** - Server error
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Create Role" icon="plus" href="/api/roles/create">
+    Learn how to create new roles
+  </Card>
+  <Card title="Assign Role" icon="user-tag" href="/api/roles/assign">
+    Assign roles to users
+  </Card>
+</CardGroup>

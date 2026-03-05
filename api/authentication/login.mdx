@@ -1,0 +1,181 @@
+---
+title: Login
+api: POST /authentication/login
+---
+
+Authenticate a user and receive access tokens.
+
+## Authentication
+
+This endpoint does not require authentication.
+
+## Request Body
+
+<ParamField body="email" type="string" required>
+  User's email address.
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  User's password. Must be at least 6 characters.
+</ParamField>
+
+## Response
+
+<ResponseField name="success" type="boolean">
+  Indicates whether the login was successful.
+</ResponseField>
+
+<ResponseField name="token" type="string">
+  JWT access token for authenticating subsequent requests.
+</ResponseField>
+
+<ResponseField name="refreshToken" type="string">
+  Refresh token for obtaining new access tokens.
+</ResponseField>
+
+<ResponseField name="refreshTokenExpiry" type="string">
+  Expiration date and time of the refresh token (ISO 8601 format).
+</ResponseField>
+
+<ResponseField name="user" type="object">
+  User information object.
+  
+  <Expandable title="user properties">
+    <ResponseField name="id" type="string">
+      User's unique identifier.
+    </ResponseField>
+    
+    <ResponseField name="email" type="string">
+      User's email address.
+    </ResponseField>
+    
+    <ResponseField name="userName" type="string">
+      User's username.
+    </ResponseField>
+    
+    <ResponseField name="phoneNumber" type="string">
+      User's phone number.
+    </ResponseField>
+    
+    <ResponseField name="twoFactorEnabled" type="boolean">
+      Indicates if two-factor authentication is enabled.
+    </ResponseField>
+    
+    <ResponseField name="lastLoginDate" type="string">
+      Date and time of last login (ISO 8601 format).
+    </ResponseField>
+    
+    <ResponseField name="lastLoginIp" type="string">
+      IP address of last login.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  A message describing the result of the operation.
+</ResponseField>
+
+<ResponseField name="errors" type="string[]">
+  Array of error messages if login failed.
+</ResponseField>
+
+<ResponseField name="requires2FA" type="boolean">
+  If true, the user must complete two-factor authentication using the `/authentication/verify-2fa` endpoint.
+</ResponseField>
+
+## Error Responses
+
+<ResponseExample>
+```json 400 Bad Request - Invalid Credentials
+{
+  "success": false,
+  "token": null,
+  "refreshToken": null,
+  "user": null,
+  "message": "Login failed",
+  "errors": [
+    "Invalid email or password"
+  ],
+  "requires2FA": false
+}
+```
+
+```json 200 2FA Required
+{
+  "success": false,
+  "token": "temp-2fa-token-xyz",
+  "refreshToken": null,
+  "user": null,
+  "message": "Two-factor authentication required",
+  "errors": null,
+  "requires2FA": true
+}
+```
+</ResponseExample>
+
+<RequestExample>
+```bash cURL
+curl -X POST https://api.sapfiai.com/authentication/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "SecureP@ssw0rd"
+  }'
+```
+
+```csharp C# Client
+using var httpClient = new HttpClient();
+var request = new LoginCommand
+{
+    Email = "user@example.com",
+    Password = "SecureP@ssw0rd"
+};
+
+var response = await httpClient.PostAsJsonAsync(
+    "https://api.sapfiai.com/authentication/login",
+    request
+);
+
+var result = await response.Content.ReadFromJsonAsync<LoginResponse>();
+
+if (result.Success)
+{
+    Console.WriteLine($"Login successful. Token: {result.Token}");
+    // Store the tokens securely
+    var accessToken = result.Token;
+    var refreshToken = result.RefreshToken;
+}
+else if (result.Requires2FA)
+{
+    Console.WriteLine("Two-factor authentication required");
+    // Proceed to verify 2FA with the temporary token
+}
+else
+{
+    Console.WriteLine($"Login failed: {string.Join(", ", result.Errors)}");
+}
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Success
+{
+  "success": true,
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refreshToken": "8f7d6e5c4b3a2918e7f6d5c4b3a29180",
+  "refreshTokenExpiry": "2026-04-05T10:30:00Z",
+  "user": {
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "email": "user@example.com",
+    "userName": "johndoe",
+    "phoneNumber": "+1234567890",
+    "twoFactorEnabled": false,
+    "lastLoginDate": "2026-03-05T10:30:00Z",
+    "lastLoginIp": "192.168.1.1"
+  },
+  "message": "Login successful",
+  "errors": null,
+  "requires2FA": false
+}
+```
+</ResponseExample>

@@ -1,0 +1,374 @@
+---
+title: 'Create & Manage Roles'
+description: 'Create, update, and delete roles in the SAPFIAI system'
+---
+
+## Create Role
+
+Create a new role in the system.
+
+### Endpoint
+
+```
+POST /api/Roles
+```
+
+### Authorization
+
+Requires **Administrator** role.
+
+### Request Body
+
+<ParamField body="name" type="string" required>
+  Name of the role. Must be unique.
+</ParamField>
+
+### Response
+
+<ResponseField name="status" type="integer">
+  HTTP status code: 201 Created
+</ResponseField>
+
+<ResponseField name="data" type="string">
+  The ID of the newly created role
+</ResponseField>
+
+<ResponseField name="location" type="string">
+  Location header with URL to the created role: `/api/roles/{id}`
+</ResponseField>
+
+### Example Request
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://api.sapfiai.com/api/Roles \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "ProjectManager"
+  }'
+```
+
+```csharp C#
+using System.Net.Http;
+using System.Text;
+using System.Text.Json;
+
+var client = new HttpClient();
+client.DefaultRequestHeaders.Authorization = 
+    new AuthenticationHeaderValue("Bearer", "YOUR_TOKEN");
+
+var command = new
+{
+    Name = "ProjectManager"
+};
+
+var content = new StringContent(
+    JsonSerializer.Serialize(command),
+    Encoding.UTF8,
+    "application/json"
+);
+
+var response = await client.PostAsync(
+    "https://api.sapfiai.com/api/Roles",
+    content
+);
+
+var roleId = await response.Content.ReadAsStringAsync();
+Console.WriteLine($"Created role: {roleId}");
+```
+</CodeGroup>
+
+### Example Response
+
+```json
+"550e8400-e29b-41d4-a716-446655440000"
+```
+
+---
+
+## Update Role
+
+Update an existing role's properties.
+
+### Endpoint
+
+```
+PUT /api/Roles/{roleId}
+```
+
+### Authorization
+
+Requires **Administrator** role.
+
+### Path Parameters
+
+<ParamField path="roleId" type="string" required>
+  ID of the role to update
+</ParamField>
+
+### Request Body
+
+<ParamField body="roleId" type="string" required>
+  ID of the role (must match path parameter)
+</ParamField>
+
+<ParamField body="name" type="string" required>
+  New name for the role
+</ParamField>
+
+### Response
+
+<ResponseField name="status" type="integer">
+  HTTP status code: 204 No Content on success
+</ResponseField>
+
+### Example Request
+
+<CodeGroup>
+```bash cURL
+curl -X PUT https://api.sapfiai.com/api/Roles/550e8400-e29b-41d4-a716-446655440000 \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "roleId": "550e8400-e29b-41d4-a716-446655440000",
+    "name": "SeniorProjectManager"
+  }'
+```
+
+```csharp C#
+var command = new
+{
+    RoleId = "550e8400-e29b-41d4-a716-446655440000",
+    Name = "SeniorProjectManager"
+};
+
+var content = new StringContent(
+    JsonSerializer.Serialize(command),
+    Encoding.UTF8,
+    "application/json"
+);
+
+var response = await client.PutAsync(
+    "https://api.sapfiai.com/api/Roles/550e8400-e29b-41d4-a716-446655440000",
+    content
+);
+
+// Returns 204 No Content on success
+```
+</CodeGroup>
+
+---
+
+## Delete Role
+
+Delete a role from the system.
+
+### Endpoint
+
+```
+DELETE /api/Roles/{roleId}
+```
+
+### Authorization
+
+Requires **Administrator** role.
+
+### Path Parameters
+
+<ParamField path="roleId" type="string" required>
+  ID of the role to delete
+</ParamField>
+
+### Response
+
+<ResponseField name="status" type="integer">
+  HTTP status code: 204 No Content on success
+</ResponseField>
+
+### Example Request
+
+<CodeGroup>
+```bash cURL
+curl -X DELETE https://api.sapfiai.com/api/Roles/550e8400-e29b-41d4-a716-446655440000 \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+```csharp C#
+var response = await client.DeleteAsync(
+    "https://api.sapfiai.com/api/Roles/550e8400-e29b-41d4-a716-446655440000"
+);
+
+// Returns 204 No Content on success
+```
+</CodeGroup>
+
+---
+
+## Get All Roles
+
+Retrieve a list of all roles in the system.
+
+### Endpoint
+
+```
+GET /api/Roles
+```
+
+### Authorization
+
+Requires **Administrator** role.
+
+### Response
+
+<ResponseField name="roles" type="array">
+  Array of role objects
+  
+  <Expandable title="Role Object">
+    <ResponseField name="id" type="string">
+      Role ID
+    </ResponseField>
+    
+    <ResponseField name="name" type="string">
+      Role name
+    </ResponseField>
+    
+    <ResponseField name="normalizedName" type="string">
+      Normalized role name
+    </ResponseField>
+    
+    <ResponseField name="permissionCount" type="integer">
+      Number of permissions assigned to this role
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example Request
+
+<CodeGroup>
+```bash cURL
+curl -X GET https://api.sapfiai.com/api/Roles \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+```csharp C#
+var response = await client.GetAsync(
+    "https://api.sapfiai.com/api/Roles"
+);
+
+var roles = await response.Content.ReadFromJsonAsync<List<RoleDto>>();
+```
+</CodeGroup>
+
+### Example Response
+
+```json
+[
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "name": "Administrator",
+    "normalizedName": "ADMINISTRATOR",
+    "permissionCount": 15
+  },
+  {
+    "id": "660e8400-e29b-41d4-a716-446655440001",
+    "name": "User",
+    "normalizedName": "USER",
+    "permissionCount": 5
+  },
+  {
+    "id": "770e8400-e29b-41d4-a716-446655440002",
+    "name": "Manager",
+    "normalizedName": "MANAGER",
+    "permissionCount": 10
+  }
+]
+```
+
+---
+
+## Get Role by ID
+
+Retrieve details of a specific role.
+
+### Endpoint
+
+```
+GET /api/Roles/{roleId}
+```
+
+### Authorization
+
+Requires **Administrator** role.
+
+### Path Parameters
+
+<ParamField path="roleId" type="string" required>
+  ID of the role to retrieve
+</ParamField>
+
+### Response
+
+<ResponseField name="id" type="string">
+  Role ID
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  Role name
+</ResponseField>
+
+<ResponseField name="normalizedName" type="string">
+  Normalized role name
+</ResponseField>
+
+<ResponseField name="permissionCount" type="integer">
+  Number of permissions assigned to this role
+</ResponseField>
+
+### Example Request
+
+<CodeGroup>
+```bash cURL
+curl -X GET https://api.sapfiai.com/api/Roles/550e8400-e29b-41d4-a716-446655440000 \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+```csharp C#
+var response = await client.GetAsync(
+    "https://api.sapfiai.com/api/Roles/550e8400-e29b-41d4-a716-446655440000"
+);
+
+var role = await response.Content.ReadFromJsonAsync<RoleDto>();
+```
+</CodeGroup>
+
+### Example Response
+
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "name": "Administrator",
+  "normalizedName": "ADMINISTRATOR",
+  "permissionCount": 15
+}
+```
+
+## Error Responses
+
+<ResponseField name="400" type="error">
+  Bad Request - Invalid request parameters or RoleId mismatch
+  
+  ```json
+  {
+    "error": "RoleId mismatch"
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="404" type="error">
+  Not Found - Role does not exist
+</ResponseField>
+
+<ResponseField name="403" type="error">
+  Forbidden - User does not have Administrator role
+</ResponseField>

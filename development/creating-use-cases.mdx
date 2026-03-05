@@ -1,0 +1,402 @@
+---
+title: Creating Use Cases
+description: Learn how to create Commands and Queries using the CQRS pattern with MediatR
+---
+
+SAPFIAI implements the CQRS (Command Query Responsibility Segregation) pattern using MediatR. This guide shows you how to create new use cases for your application.
+
+## Architecture Overview
+
+Use cases are organized in the `Application` layer under feature folders:
+
+```
+src/Application/
+  ├── Permissions/
+  │   ├── Commands/
+  │   └── Queries/
+  ├── Roles/
+  │   ├── Commands/
+  │   └── Queries/
+  └── Users/
+      ├── Commands/
+      └── Queries/
+```
+
+Each use case consists of three files:
+1. **Command/Query** - The request object
+2. **Handler** - The business logic
+3. **Validator** - FluentValidation rules (optional but recommended)
+
+## Using the Template Generator
+
+The fastest way to create a new use case is using the `dotnet new ca-usecase` template.
+
+### Creating a Command
+
+Commands modify state and typically return a result:
+
+```bash
+dotnet new ca-usecase \
+  --name CrearUsuario \
+  --feature-name Usuarios \
+  --usecase-type command \
+  --return-type int
+```
+
+### Creating a Query
+
+Queries retrieve data without side effects:
+
+```bash
+dotnet new ca-usecase \
+  --name ObtenerUsuarios \
+  --feature-name Usuarios \
+  --usecase-type query \
+  --return-type "List<UsuarioDto>"
+```
+
+### Template Options
+
+View all available options:
+
+```bash
+dotnet new ca-usecase --help
+```
+
+## Creating Commands Manually
+
+Here's a complete example of creating a command to create permissions.
+
+### Step 1: Define the Command
+
+Create `CreatePermissionCommand.cs` in `src/Application/Permissions/Commands/CreatePermission/`:
+
+```csharp
+using SAPFIAI.Application.Common.Models;
+
+namespace SAPFIAI.Application.Permissions.Commands.CreatePermission;
+
+public record CreatePermissionCommand : IRequest<Result<int>>
+{
+    public required string Name { get; init; }
+    public string? Description { get; init; }
+    public required string Module { get; init; }
+}
+```
+
+<Note>
+  Commands and Queries use `record` types for immutability and value-based equality.
+</Note>
+
+### Step 2: Implement the Handler
+
+Create `CreatePermissionCommandHandler.cs`:
+
+```csharp
+using SAPFIAI.Application.Common.Interfaces;
+using SAPFIAI.Application.Common.Models;
+using SAPFIAI.Domain.Entities;
+using Microsoft.Extensions.Logging;
+
+namespace SAPFIAI.Application.Permissions.Commands.CreatePermission;
+
+public class CreatePermissionCommandHandler : IRequestHandler<CreatePermissionCommand, Result<int>>
+{
+    private readonly IApplicationDbContext _context;
+    private readonly ILogger<CreatePermissionCommandHandler> _logger;
+
+    public CreatePermissionCommandHandler(
+        IApplicationDbContext context, 
+        ILogger<CreatePermissionCommandHandler> logger)
+    {
+        _context = context;
+        _logger = logger;
+    }
+
+    public async Task<Result<int>> Handle(
+        CreatePermissionCommand request, 
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Creating permission: {PermissionName}", request.Name);
+        
+        // Business logic: Check if permission already exists
+        var exists = await _context.Permissions
+            .AnyAsync(p => p.Name == request.Name, cancellationToken);
+
+        if (exists)
+        {
+            _logger.LogWarning("Permission already exists: {PermissionName}", request.Name);
+            return Result.Failure<int>(new Error(
+                "PermissionExists", 
+                "El permiso ya existe"
+            ));
+        }
+
+        // Create entity
+        var permission = new Permission
+        {
+            Name = request.Name,
+            Description = request.Description,
+            Module = request.Module,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _context.Permissions.Add(permission);
+        await _context.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation("Permission created successfully: {PermissionId}", permission.Id);
+        return Result.Success(permission.Id);
+    }
+}
+```
+
+Key patterns in handlers:
+- **Dependency Injection**: Inject `IApplicationDbContext` and `ILogger`
+- **Logging**: Log important operations for debugging and monitoring
+- **Business Validation**: Check business rules before persisting
+- **Result Pattern**: Return `Result<T>` for success/failure scenarios
+- **CancellationToken**: Support request cancellation
+
+### Step 3: Add Validation
+
+Create `CreatePermissionCommandValidator.cs`:
+
+```csharp
+namespace SAPFIAI.Application.Permissions.Commands.CreatePermission;
+
+public class CreatePermissionCommandValidator : AbstractValidator<CreatePermissionCommand>
+{
+    public CreatePermissionCommandValidator()
+    {
+        RuleFor(x => x.Name)
+            .NotEmpty().WithMessage("El nombre del permiso es requerido")
+            .MaximumLength(100).WithMessage("El nombre no puede exceder 100 caracteres")
+            .Matches("^[a-z0-9._-]+$").WithMessage("Use formato: modulo.accion (ej: users.create)");
+
+        RuleFor(x => x.Module)
+            .NotEmpty().WithMessage("El módulo es requerido")
+            .MaximumLength(50).WithMessage("El módulo no puede exceder 50 caracteres");
+
+        RuleFor(x => x.Description)
+            .MaximumLength(500).WithMessage("La descripción no puede exceder 500 caracteres")
+            .When(x => !string.IsNullOrEmpty(x.Description));
+    }
+}
+```
+
+<Tip>
+  Validators are automatically discovered and executed by MediatR's validation pipeline before the handler runs.
+</Tip>
+
+## Creating Queries Manually
+
+Queries follow a similar pattern but focus on data retrieval.
+
+### Step 1: Define the Query
+
+Create `GetPermissionsQuery.cs` in `src/Application/Permissions/Queries/GetPermissions/`:
+
+```csharp
+using SAPFIAI.Application.Common.Models;
+
+namespace SAPFIAI.Application.Permissions.Queries.GetPermissions;
+
+public record GetPermissionsQuery : IRequest<List<PermissionDto>>
+{
+    public bool ActiveOnly { get; init; } = false;
+}
+```
+
+### Step 2: Implement the Handler
+
+Create `GetPermissionsQueryHandler.cs`:
+
+```csharp
+using SAPFIAI.Application.Common.Interfaces;
+using SAPFIAI.Application.Common.Models;
+
+namespace SAPFIAI.Application.Permissions.Queries.GetPermissions;
+
+public class GetPermissionsQueryHandler : IRequestHandler<GetPermissionsQuery, List<PermissionDto>>
+{
+    private readonly IApplicationDbContext _context;
+
+    public GetPermissionsQueryHandler(IApplicationDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<List<PermissionDto>> Handle(
+        GetPermissionsQuery request, 
+        CancellationToken cancellationToken)
+    {
+        var query = _context.Permissions.AsQueryable();
+
+        if (request.ActiveOnly)
+        {
+            query = query.Where(p => p.IsActive);
+        }
+
+        return await query
+            .Select(p => new PermissionDto
+            {
+                Id = p.Id,
+                Name = p.Name,
+                Description = p.Description,
+                Module = p.Module,
+                IsActive = p.IsActive,
+                CreatedAt = p.CreatedAt
+            })
+            .ToListAsync(cancellationToken);
+    }
+}
+```
+
+<Note>
+  Queries typically project directly to DTOs to avoid loading unnecessary data and prevent accidental entity modification.
+</Note>
+
+## DTOs (Data Transfer Objects)
+
+Define DTOs in `src/Application/Common/Models/`:
+
+```csharp
+namespace SAPFIAI.Application.Common.Models;
+
+public class PermissionDto
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string Module { get; set; } = string.Empty;
+    public bool IsActive { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+```
+
+## Using Commands and Queries
+
+### In Controllers/Endpoints
+
+Inject `ISender` from MediatR:
+
+```csharp
+public class PermissionsController : ApiControllerBase
+{
+    [HttpPost]
+    public async Task<ActionResult<int>> Create(CreatePermissionCommand command)
+    {
+        var result = await Mediator.Send(command);
+        
+        if (result.IsFailure)
+        {
+            return BadRequest(result.Error);
+        }
+        
+        return Ok(result.Value);
+    }
+
+    [HttpGet]
+    public async Task<ActionResult<List<PermissionDto>>> GetAll([FromQuery] bool activeOnly = false)
+    {
+        var query = new GetPermissionsQuery { ActiveOnly = activeOnly };
+        return await Mediator.Send(query);
+    }
+}
+```
+
+### In Other Handlers
+
+Handlers can call other handlers:
+
+```csharp
+public class SomeCommandHandler : IRequestHandler<SomeCommand, Result>
+{
+    private readonly ISender _mediator;
+
+    public SomeCommandHandler(ISender mediator)
+    {
+        _mediator = mediator;
+    }
+
+    public async Task<Result> Handle(SomeCommand request, CancellationToken cancellationToken)
+    {
+        // Call another query or command
+        var permissions = await _mediator.Send(
+            new GetPermissionsQuery { ActiveOnly = true }, 
+            cancellationToken
+        );
+        
+        // Continue with business logic...
+    }
+}
+```
+
+## Result Pattern
+
+Use the `Result<T>` pattern for operations that can fail:
+
+```csharp
+// Success
+return Result.Success(value);
+
+// Failure
+return Result.Failure<T>(new Error("ErrorCode", "Error message"));
+
+// Checking results
+if (result.IsSuccess)
+{
+    var value = result.Value;
+}
+else
+{
+    var error = result.Error;
+    var code = error.Code;
+    var message = error.Description;
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Keep Handlers Focused">
+    Each handler should do one thing well. If logic becomes complex, extract it into domain services or separate handlers.
+  </Accordion>
+
+  <Accordion title="Use Validation Liberally">
+    Validate all input at the command/query level. Business rules go in the handler, input validation in the validator.
+  </Accordion>
+
+  <Accordion title="Project to DTOs in Queries">
+    Never return domain entities from queries. Always project to DTOs to control what data is exposed.
+  </Accordion>
+
+  <Accordion title="Use Cancellation Tokens">
+    Always pass and respect `CancellationToken` to support request cancellation and improve resource utilization.
+  </Accordion>
+
+  <Accordion title="Log Appropriately">
+    Log important operations (Information), warnings (Warning), and errors (Error). Avoid logging sensitive data.
+  </Accordion>
+</AccordionGroup>
+
+## Real-World Examples
+
+Explore these examples in the codebase:
+
+- **Commands with validation**: `src/Application/Permissions/Commands/CreatePermission/`
+- **Queries with filtering**: `src/Application/Permissions/Queries/GetPermissions/`
+- **Complex commands**: `src/Application/Users/Commands/Login/`
+- **Multiple validators**: `src/Application/Users/Commands/Login/LoginCommand.cs:39`
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Testing" icon="flask" href="/development/testing">
+    Learn how to test your use cases
+  </Card>
+  <Card title="Database Migrations" icon="database" href="/development/database-migrations">
+    Update your database schema
+  </Card>
+</CardGroup>

@@ -1,0 +1,347 @@
+---
+title: JWT Authentication
+description: JWT token generation, validation, and refresh token mechanism in SAPFIAI Clean Architecture
+---
+
+## Overview
+
+SAPFIAI uses JSON Web Tokens (JWT) for stateless authentication. The system implements secure token generation, validation, and a refresh token mechanism for extended sessions.
+
+## JWT Token Generator
+
+The `JwtTokenGenerator` service handles all JWT operations:
+
+**Location:** `src/Infrastructure/Services/JwtTokenGenerator.cs`
+
+### Token Configuration
+
+JWT tokens are configured through `appsettings.json`:
+
+```json
+{
+  "Jwt": {
+    "Key": "your-secret-key-here",
+    "Issuer": "SAPFIAI",
+    "Audience": "SAPFIAI-Users",
+    "ExpireMinutes": 60
+  }
+}
+```
+
+### Token Generation
+
+The `GenerateToken` method creates JWT tokens with user information and claims:
+
+```csharp
+public string GenerateToken(
+    string userId, 
+    string email, 
+    IEnumerable<string>? roles = null, 
+    IEnumerable<string>? permissions = null, 
+    bool requiresTwoFactorVerification = false)
+```
+
+**Claims included:**
+- `sub` (Subject): User ID
+- `email`: User email
+- `jti` (JWT ID): Unique token identifier
+- `NameIdentifier`: User ID for ASP.NET Core Identity
+- `2fa_pending`: Two-factor authentication status
+- `role`: User roles (multiple claims)
+- `permission`: User permissions (multiple claims)
+
+**Example:**
+
+```csharp
+var token = _jwtTokenGenerator.GenerateToken(
+    userId: "user-123",
+    email: "user@example.com",
+    roles: new[] { "User", "Admin" },
+    permissions: new[] { "users.read", "users.write" },
+    requiresTwoFactorVerification: false
+);
+```
+
+### Token Validation
+
+The `ValidateToken` method verifies token signature, issuer, audience, and lifetime:
+
+```csharp
+public bool ValidateToken(string token)
+```
+
+**Validation parameters:**
+- `ValidateIssuerSigningKey`: true (HMAC-SHA256)
+- `ValidateIssuer`: true
+- `ValidateAudience`: true
+- `ValidateLifetime`: true
+- `ClockSkew`: Zero (no tolerance for expired tokens)
+
+**Example:**
+
+```csharp
+if (_jwtTokenGenerator.ValidateToken(token))
+{
+    var userId = _jwtTokenGenerator.GetUserIdFromToken(token);
+    var email = _jwtTokenGenerator.GetEmailFromToken(token);
+    // Token is valid
+}
+```
+
+### Extracting Claims
+
+Utility methods for extracting information from tokens:
+
+```csharp
+// Get user ID from token
+string? userId = _jwtTokenGenerator.GetUserIdFromToken(token);
+
+// Get email from token
+string? email = _jwtTokenGenerator.GetEmailFromToken(token);
+
+// Check if 2FA is required
+bool requires2FA = _jwtTokenGenerator.RequiresTwoFactorVerification(token);
+```
+
+## Refresh Token Mechanism
+
+The refresh token system allows users to obtain new access tokens without re-authenticating.
+
+### RefreshToken Entity
+
+**Location:** `src/Domain/Entities/RefreshToken.cs`
+
+```csharp
+public class RefreshToken : BaseEntity
+{
+    public string Token { get; private set; }
+    public string UserId { get; private set; }
+    public DateTime ExpiryDate { get; private set; }
+    public DateTime CreatedDate { get; private set; }
+    public bool IsRevoked { get; private set; }
+    public DateTime? RevokedDate { get; private set; }
+    public string? ReplacedByToken { get; private set; }
+    public string? CreatedByIp { get; private set; }
+    public string? RevokedByIp { get; private set; }
+    public string? ReasonRevoked { get; private set; }
+
+    // Computed properties
+    public bool IsActive => !IsRevoked && !IsExpired;
+    public bool IsExpired => DateTime.UtcNow >= ExpiryDate;
+}
+```
+
+### RefreshTokenService
+
+**Location:** `src/Infrastructure/Services/RefreshTokenService.cs`
+
+#### Configuration
+
+```json
+{
+  "Security": {
+    "RefreshToken": {
+      "ExpirationDays": 7,
+      "MaxActiveTokensPerUser": 5
+    }
+  }
+}
+```
+
+#### Generating Refresh Tokens
+
+```csharp
+public async Task<RefreshToken> GenerateRefreshTokenAsync(
+    string userId, 
+    string ipAddress)
+```
+
+**Features:**
+- Generates cryptographically secure 64-byte token
+- Automatically revokes oldest token if user exceeds max active tokens
+- Associates token with IP address for security tracking
+
+**Example:**
+
+```csharp
+var refreshToken = await _refreshTokenService.GenerateRefreshTokenAsync(
+    userId: "user-123",
+    ipAddress: "192.168.1.1"
+);
+```
+
+#### Validating Refresh Tokens
+
+```csharp
+public async Task<(bool isValid, string? userId, string? email)> 
+    ValidateRefreshTokenAsync(string token, string ipAddress)
+```
+
+**Validation checks:**
+- Token exists in database
+- Token is not revoked
+- Token is not expired
+- Associated user still exists
+
+**Example:**
+
+```csharp
+var (isValid, userId, email) = await _refreshTokenService
+    .ValidateRefreshTokenAsync(refreshToken, ipAddress);
+
+if (isValid)
+{
+    // Generate new access token
+    var newAccessToken = _jwtTokenGenerator.GenerateToken(userId!, email!);
+}
+```
+
+#### Revoking Tokens
+
+**Revoke single token:**
+
+```csharp
+await _refreshTokenService.RevokeRefreshTokenAsync(
+    token: "token-value",
+    ipAddress: "192.168.1.1",
+    reason: "User logged out"
+);
+```
+
+**Revoke all user tokens:**
+
+```csharp
+int revokedCount = await _refreshTokenService.RevokeAllUserTokensAsync(
+    userId: "user-123",
+    ipAddress: "192.168.1.1",
+    reason: "Security: Password changed"
+);
+```
+
+#### Managing Active Tokens
+
+**Get active tokens for user:**
+
+```csharp
+var activeTokens = await _refreshTokenService.GetActiveTokensByUserAsync("user-123");
+```
+
+**Cleanup expired tokens:**
+
+```csharp
+int deletedCount = await _refreshTokenService.CleanupExpiredTokensAsync();
+```
+
+## API Endpoints
+
+### Login
+
+```http
+POST /api/authentication/login
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "password123"
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refreshToken": "base64-encoded-token...",
+  "refreshTokenExpiry": "2024-01-15T10:00:00Z",
+  "requires2FA": false,
+  "user": {
+    "id": "user-123",
+    "email": "user@example.com",
+    "userName": "john.doe"
+  }
+}
+```
+
+### Refresh Token
+
+```http
+POST /api/authentication/refresh-token
+Content-Type: application/json
+
+{
+  "refreshToken": "base64-encoded-token..."
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "token": "new-jwt-token...",
+  "refreshToken": "new-refresh-token...",
+  "refreshTokenExpiry": "2024-01-22T10:00:00Z"
+}
+```
+
+### Revoke Token
+
+```http
+POST /api/authentication/revoke-token
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "refreshToken": "base64-encoded-token..."
+}
+```
+
+## Security Best Practices
+
+### Token Storage
+
+- **Access tokens**: Store in memory (React state, Vue store) - never in localStorage
+- **Refresh tokens**: Store in httpOnly cookies or secure storage
+- Never expose tokens in URLs or logs
+
+### Token Rotation
+
+- Refresh tokens are single-use when configured
+- New refresh token issued with each access token refresh
+- Old refresh token automatically revoked
+
+### Token Revocation
+
+- All tokens revoked on password change
+- Manual revocation available through API
+- Automatic cleanup of expired tokens
+
+### Security Headers
+
+Always validate tokens on the server side:
+
+```csharp
+[Authorize]
+public async Task<IActionResult> SecureEndpoint()
+{
+    var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    // User is authenticated
+}
+```
+
+## Implementation Details
+
+**File locations:**
+- JWT Generator: `src/Infrastructure/Services/JwtTokenGenerator.cs:11`
+- Refresh Token Service: `src/Infrastructure/Services/RefreshTokenService.cs:9`
+- RefreshToken Entity: `src/Domain/Entities/RefreshToken.cs:3`
+- Login Endpoint: `src/Web/Endpoints/Authentication.cs:112`
+- Refresh Endpoint: `src/Web/Endpoints/Authentication.cs:169`
+- Revoke Endpoint: `src/Web/Endpoints/Authentication.cs:198`
+
+## See Also
+
+- [Two-Factor Authentication](/security/two-factor-auth)
+- [IP Blocking](/security/ip-blocking)
+- [Audit Logs](/security/audit-logs)

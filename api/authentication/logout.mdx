@@ -1,0 +1,123 @@
+---
+title: Logout
+api: POST /authentication/logout
+---
+
+Log out the current user and invalidate their tokens.
+
+## Authentication
+
+**Required**: This endpoint requires authentication via Bearer token.
+
+```bash
+Authorization: Bearer {token}
+```
+
+## Request Body
+
+This endpoint does not require a request body. The user ID is automatically extracted from the authentication token.
+
+## Response
+
+<ResponseField name="isSuccess" type="boolean">
+  Indicates whether the logout was successful.
+</ResponseField>
+
+<ResponseField name="succeeded" type="boolean">
+  Alias for isSuccess. Indicates whether the operation succeeded.
+</ResponseField>
+
+<ResponseField name="error" type="object">
+  Error information if the operation failed.
+  
+  <Expandable title="error properties">
+    <ResponseField name="code" type="string">
+      Error code identifier.
+    </ResponseField>
+    
+    <ResponseField name="description" type="string">
+      Human-readable error description.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="errors" type="object[]">
+  Array of error objects if the operation failed.
+</ResponseField>
+
+## Error Responses
+
+<ResponseExample>
+```json 401 Unauthorized
+{
+  "type": "https://tools.ietf.org/html/rfc7235#section-3.1",
+  "title": "Unauthorized",
+  "status": 401,
+  "detail": "Authorization token is missing or invalid"
+}
+```
+
+```json 400 Bad Request
+{
+  "isSuccess": false,
+  "succeeded": false,
+  "error": {
+    "code": "Logout.Failed",
+    "description": "Failed to logout user"
+  },
+  "errors": [
+    {
+      "code": "Logout.Failed",
+      "description": "Failed to logout user"
+    }
+  ]
+}
+```
+</ResponseExample>
+
+<RequestExample>
+```bash cURL
+curl -X POST https://api.sapfiai.com/authentication/logout \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+  -H "Content-Type: application/json"
+```
+
+```csharp C# Client
+using var httpClient = new HttpClient();
+
+// Add the authorization header with the access token
+httpClient.DefaultRequestHeaders.Authorization = 
+    new AuthenticationHeaderValue("Bearer", accessToken);
+
+var response = await httpClient.PostAsync(
+    "https://api.sapfiai.com/authentication/logout",
+    null
+);
+
+var result = await response.Content.ReadFromJsonAsync<Result>();
+
+if (result.Succeeded)
+{
+    Console.WriteLine("Logout successful");
+    // Clear stored tokens
+}
+else
+{
+    Console.WriteLine($"Logout failed: {result.Error.Description}");
+}
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Success
+{
+  "isSuccess": true,
+  "succeeded": true,
+  "error": {
+    "code": "",
+    "description": ""
+  },
+  "errors": []
+}
+```
+</ResponseExample>

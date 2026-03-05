@@ -1,0 +1,733 @@
+---
+title: 'Manage Permissions'
+description: 'Create, update, delete, and assign permissions in the SAPFIAI system'
+---
+
+## Create Permission
+
+Create a new permission in the system.
+
+### Endpoint
+
+```
+POST /api/Permissions
+```
+
+### Authorization
+
+Requires **Administrator** role.
+
+### Request Body
+
+<ParamField body="name" type="string" required>
+  Unique name of the permission (e.g., "users.create", "reports.view")
+</ParamField>
+
+<ParamField body="description" type="string">
+  Human-readable description of what the permission allows
+</ParamField>
+
+<ParamField body="module" type="string" required>
+  Module or feature area this permission belongs to (e.g., "Users", "Reports")
+</ParamField>
+
+### Response
+
+<ResponseField name="status" type="integer">
+  HTTP status code: 201 Created
+</ResponseField>
+
+<ResponseField name="data" type="integer">
+  The ID of the newly created permission
+</ResponseField>
+
+<ResponseField name="location" type="string">
+  Location header with URL to the created permission: `/api/permissions/{id}`
+</ResponseField>
+
+### Example Request
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://api.sapfiai.com/api/Permissions \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "users.create",
+    "description": "Allows creating new users in the system",
+    "module": "Users"
+  }'
+```
+
+```csharp C#
+using System.Net.Http;
+using System.Text;
+using System.Text.Json;
+
+var client = new HttpClient();
+client.DefaultRequestHeaders.Authorization = 
+    new AuthenticationHeaderValue("Bearer", "YOUR_TOKEN");
+
+var command = new
+{
+    Name = "users.create",
+    Description = "Allows creating new users in the system",
+    Module = "Users"
+};
+
+var content = new StringContent(
+    JsonSerializer.Serialize(command),
+    Encoding.UTF8,
+    "application/json"
+);
+
+var response = await client.PostAsync(
+    "https://api.sapfiai.com/api/Permissions",
+    content
+);
+
+var permissionId = await response.Content.ReadAsStringAsync();
+Console.WriteLine($"Created permission: {permissionId}");
+```
+</CodeGroup>
+
+### Example Response
+
+```json
+42
+```
+
+---
+
+## Update Permission
+
+Update an existing permission's properties.
+
+### Endpoint
+
+```
+PUT /api/Permissions/{permissionId}
+```
+
+### Authorization
+
+Requires **Administrator** role.
+
+### Path Parameters
+
+<ParamField path="permissionId" type="integer" required>
+  ID of the permission to update
+</ParamField>
+
+### Request Body
+
+<ParamField body="permissionId" type="integer" required>
+  ID of the permission (must match path parameter)
+</ParamField>
+
+<ParamField body="name" type="string" required>
+  Name of the permission
+</ParamField>
+
+<ParamField body="description" type="string">
+  Description of the permission
+</ParamField>
+
+<ParamField body="module" type="string" required>
+  Module the permission belongs to
+</ParamField>
+
+<ParamField body="isActive" type="boolean" required>
+  Whether the permission is active
+</ParamField>
+
+### Response
+
+<ResponseField name="status" type="integer">
+  HTTP status code: 204 No Content on success
+</ResponseField>
+
+### Example Request
+
+<CodeGroup>
+```bash cURL
+curl -X PUT https://api.sapfiai.com/api/Permissions/42 \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "permissionId": 42,
+    "name": "users.create",
+    "description": "Allows creating and inviting new users",
+    "module": "Users",
+    "isActive": true
+  }'
+```
+
+```csharp C#
+var command = new
+{
+    PermissionId = 42,
+    Name = "users.create",
+    Description = "Allows creating and inviting new users",
+    Module = "Users",
+    IsActive = true
+};
+
+var content = new StringContent(
+    JsonSerializer.Serialize(command),
+    Encoding.UTF8,
+    "application/json"
+);
+
+var response = await client.PutAsync(
+    "https://api.sapfiai.com/api/Permissions/42",
+    content
+);
+
+// Returns 204 No Content on success
+```
+</CodeGroup>
+
+---
+
+## Delete Permission
+
+Delete a permission from the system.
+
+<Warning>
+  Deleting a permission will remove it from all roles. This action cannot be undone.
+</Warning>
+
+### Endpoint
+
+```
+DELETE /api/Permissions/{permissionId}
+```
+
+### Authorization
+
+Requires **Administrator** role.
+
+### Path Parameters
+
+<ParamField path="permissionId" type="integer" required>
+  ID of the permission to delete
+</ParamField>
+
+### Response
+
+<ResponseField name="status" type="integer">
+  HTTP status code: 204 No Content on success
+</ResponseField>
+
+### Example Request
+
+<CodeGroup>
+```bash cURL
+curl -X DELETE https://api.sapfiai.com/api/Permissions/42 \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+```csharp C#
+var response = await client.DeleteAsync(
+    "https://api.sapfiai.com/api/Permissions/42"
+);
+
+// Returns 204 No Content on success
+```
+</CodeGroup>
+
+---
+
+## Get All Permissions
+
+Retrieve a list of all permissions in the system.
+
+### Endpoint
+
+```
+GET /api/Permissions
+```
+
+### Authorization
+
+Requires **Administrator** role.
+
+### Query Parameters
+
+<ParamField query="activeOnly" type="boolean" default="false">
+  When set to `true`, returns only active permissions
+</ParamField>
+
+### Response
+
+<ResponseField name="permissions" type="array">
+  Array of permission objects
+  
+  <Expandable title="Permission Object">
+    <ResponseField name="id" type="integer">
+      Permission ID
+    </ResponseField>
+    
+    <ResponseField name="name" type="string">
+      Permission name
+    </ResponseField>
+    
+    <ResponseField name="description" type="string">
+      Permission description
+    </ResponseField>
+    
+    <ResponseField name="module" type="string">
+      Module name
+    </ResponseField>
+    
+    <ResponseField name="isActive" type="boolean">
+      Whether the permission is active
+    </ResponseField>
+    
+    <ResponseField name="createdAt" type="string">
+      ISO 8601 timestamp
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example Request
+
+<CodeGroup>
+```bash cURL
+# Get all permissions
+curl -X GET https://api.sapfiai.com/api/Permissions \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# Get only active permissions
+curl -X GET "https://api.sapfiai.com/api/Permissions?activeOnly=true" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+```csharp C#
+// Get all permissions
+var response = await client.GetAsync(
+    "https://api.sapfiai.com/api/Permissions"
+);
+
+var permissions = await response.Content.ReadFromJsonAsync<List<PermissionDto>>();
+
+// Get only active permissions
+var activeResponse = await client.GetAsync(
+    "https://api.sapfiai.com/api/Permissions?activeOnly=true"
+);
+
+var activePermissions = await activeResponse.Content.ReadFromJsonAsync<List<PermissionDto>>();
+```
+</CodeGroup>
+
+### Example Response
+
+```json
+[
+  {
+    "id": 1,
+    "name": "users.create",
+    "description": "Allows creating new users in the system",
+    "module": "Users",
+    "isActive": true,
+    "createdAt": "2024-01-15T10:30:00Z"
+  },
+  {
+    "id": 2,
+    "name": "users.read",
+    "description": "Allows viewing user information",
+    "module": "Users",
+    "isActive": true,
+    "createdAt": "2024-01-15T10:31:00Z"
+  },
+  {
+    "id": 3,
+    "name": "reports.export",
+    "description": "Allows exporting reports to various formats",
+    "module": "Reports",
+    "isActive": true,
+    "createdAt": "2024-01-15T10:32:00Z"
+  }
+]
+```
+
+---
+
+## Get Permission by ID
+
+Retrieve details of a specific permission.
+
+### Endpoint
+
+```
+GET /api/Permissions/{permissionId}
+```
+
+### Authorization
+
+Requires **Administrator** role.
+
+### Path Parameters
+
+<ParamField path="permissionId" type="integer" required>
+  ID of the permission to retrieve
+</ParamField>
+
+### Response
+
+<ResponseField name="id" type="integer">
+  Permission ID
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  Permission name
+</ResponseField>
+
+<ResponseField name="description" type="string">
+  Permission description
+</ResponseField>
+
+<ResponseField name="module" type="string">
+  Module name
+</ResponseField>
+
+<ResponseField name="isActive" type="boolean">
+  Whether the permission is active
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  ISO 8601 timestamp
+</ResponseField>
+
+### Example Request
+
+<CodeGroup>
+```bash cURL
+curl -X GET https://api.sapfiai.com/api/Permissions/1 \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+```csharp C#
+var response = await client.GetAsync(
+    "https://api.sapfiai.com/api/Permissions/1"
+);
+
+var permission = await response.Content.ReadFromJsonAsync<PermissionDto>();
+```
+</CodeGroup>
+
+### Example Response
+
+```json
+{
+  "id": 1,
+  "name": "users.create",
+  "description": "Allows creating new users in the system",
+  "module": "Users",
+  "isActive": true,
+  "createdAt": "2024-01-15T10:30:00Z"
+}
+```
+
+---
+
+## Assign Permission to Role
+
+Assign a permission to a specific role.
+
+### Endpoint
+
+```
+POST /api/Permissions/assign
+```
+
+### Authorization
+
+Requires **Administrator** role.
+
+### Request Body
+
+<ParamField body="roleId" type="string" required>
+  ID of the role to assign the permission to
+</ParamField>
+
+<ParamField body="permissionId" type="integer" required>
+  ID of the permission to assign
+</ParamField>
+
+<ParamField body="assignedBy" type="string">
+  User ID of the administrator making the assignment (optional)
+</ParamField>
+
+### Response
+
+<ResponseField name="status" type="integer">
+  HTTP status code: 204 No Content on success
+</ResponseField>
+
+### Example Request
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://api.sapfiai.com/api/Permissions/assign \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "roleId": "550e8400-e29b-41d4-a716-446655440000",
+    "permissionId": 1,
+    "assignedBy": "auth0|admin123"
+  }'
+```
+
+```csharp C#
+var command = new
+{
+    RoleId = "550e8400-e29b-41d4-a716-446655440000",
+    PermissionId = 1,
+    AssignedBy = "auth0|admin123"
+};
+
+var content = new StringContent(
+    JsonSerializer.Serialize(command),
+    Encoding.UTF8,
+    "application/json"
+);
+
+var response = await client.PostAsync(
+    "https://api.sapfiai.com/api/Permissions/assign",
+    content
+);
+
+// Returns 204 No Content on success
+if (response.IsSuccessStatusCode)
+{
+    Console.WriteLine("Permission assigned successfully");
+}
+```
+</CodeGroup>
+
+---
+
+## Remove Permission from Role
+
+Remove a permission assignment from a role.
+
+### Endpoint
+
+```
+POST /api/Permissions/remove
+```
+
+### Authorization
+
+Requires **Administrator** role.
+
+### Request Body
+
+<ParamField body="roleId" type="string" required>
+  ID of the role to remove the permission from
+</ParamField>
+
+<ParamField body="permissionId" type="integer" required>
+  ID of the permission to remove
+</ParamField>
+
+### Response
+
+<ResponseField name="status" type="integer">
+  HTTP status code: 204 No Content on success
+</ResponseField>
+
+### Example Request
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://api.sapfiai.com/api/Permissions/remove \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "roleId": "550e8400-e29b-41d4-a716-446655440000",
+    "permissionId": 1
+  }'
+```
+
+```csharp C#
+var command = new
+{
+    RoleId = "550e8400-e29b-41d4-a716-446655440000",
+    PermissionId = 1
+};
+
+var content = new StringContent(
+    JsonSerializer.Serialize(command),
+    Encoding.UTF8,
+    "application/json"
+);
+
+var response = await client.PostAsync(
+    "https://api.sapfiai.com/api/Permissions/remove",
+    content
+);
+
+// Returns 204 No Content on success
+if (response.IsSuccessStatusCode)
+{
+    Console.WriteLine("Permission removed successfully");
+}
+```
+</CodeGroup>
+
+---
+
+## Get Role Permissions
+
+Retrieve all permissions assigned to a specific role.
+
+### Endpoint
+
+```
+GET /api/Permissions/role/{roleId}
+```
+
+### Authorization
+
+Requires **Administrator** role.
+
+### Path Parameters
+
+<ParamField path="roleId" type="string" required>
+  ID of the role to retrieve permissions for
+</ParamField>
+
+### Response
+
+<ResponseField name="permissions" type="array">
+  Array of permission objects assigned to the role
+</ResponseField>
+
+### Example Request
+
+<CodeGroup>
+```bash cURL
+curl -X GET https://api.sapfiai.com/api/Permissions/role/550e8400-e29b-41d4-a716-446655440000 \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+```csharp C#
+var roleId = "550e8400-e29b-41d4-a716-446655440000";
+var response = await client.GetAsync(
+    $"https://api.sapfiai.com/api/Permissions/role/{roleId}"
+);
+
+var permissions = await response.Content.ReadFromJsonAsync<List<PermissionDto>>();
+
+foreach (var permission in permissions)
+{
+    Console.WriteLine($"Role has permission: {permission.Name}");
+}
+```
+</CodeGroup>
+
+### Example Response
+
+```json
+[
+  {
+    "id": 1,
+    "name": "users.create",
+    "description": "Allows creating new users in the system",
+    "module": "Users",
+    "isActive": true,
+    "createdAt": "2024-01-15T10:30:00Z"
+  },
+  {
+    "id": 2,
+    "name": "users.read",
+    "description": "Allows viewing user information",
+    "module": "Users",
+    "isActive": true,
+    "createdAt": "2024-01-15T10:31:00Z"
+  }
+]
+```
+
+---
+
+## Common Workflows
+
+### Setup Role with Full Module Access
+
+```csharp
+// Create permissions for a module
+var modulePermissions = new[]
+{
+    new { Name = "documents.create", Description = "Create documents", Module = "Documents" },
+    new { Name = "documents.read", Description = "View documents", Module = "Documents" },
+    new { Name = "documents.update", Description = "Update documents", Module = "Documents" },
+    new { Name = "documents.delete", Description = "Delete documents", Module = "Documents" }
+};
+
+var permissionIds = new List<int>();
+
+// Create each permission
+foreach (var perm in modulePermissions)
+{
+    var content = new StringContent(
+        JsonSerializer.Serialize(perm),
+        Encoding.UTF8,
+        "application/json"
+    );
+    
+    var response = await client.PostAsync(
+        "https://api.sapfiai.com/api/Permissions",
+        content
+    );
+    
+    var permId = int.Parse(await response.Content.ReadAsStringAsync());
+    permissionIds.Add(permId);
+}
+
+// Assign all permissions to a role
+var roleId = "550e8400-e29b-41d4-a716-446655440000";
+foreach (var permId in permissionIds)
+{
+    var assignCommand = new
+    {
+        RoleId = roleId,
+        PermissionId = permId
+    };
+    
+    await client.PostAsync(
+        "https://api.sapfiai.com/api/Permissions/assign",
+        new StringContent(
+            JsonSerializer.Serialize(assignCommand),
+            Encoding.UTF8,
+            "application/json"
+        )
+    );
+}
+```
+
+## Error Responses
+
+<ResponseField name="400" type="error">
+  Bad Request - Invalid request parameters or permission already exists
+  
+  ```json
+  {
+    "errors": {
+      "Name": ["Permission name already exists"],
+      "Module": ["Module is required"]
+    }
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="404" type="error">
+  Not Found - Permission or role not found
+</ResponseField>
+
+<ResponseField name="409" type="error">
+  Conflict - Permission already assigned to role (for assign) or not assigned (for remove)
+</ResponseField>

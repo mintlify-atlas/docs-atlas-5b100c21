@@ -1,0 +1,407 @@
+---
+title: CI/CD Pipeline
+description: Automated deployment with GitHub Actions for SAPFIAI Clean Architecture API
+---
+
+This guide covers setting up continuous integration and continuous deployment (CI/CD) for the SAPFIAI project using GitHub Actions.
+
+## Overview
+
+The CI/CD pipeline automates:
+
+- **Build**: Compiling the application in Release mode
+- **Test**: Running unit and functional tests
+- **Publish**: Creating deployment artifacts
+- **Deploy**: Deploying to hosting environment (SmarterASP.NET)
+
+## GitHub Actions Workflow
+
+The project includes a pre-configured workflow at:
+```
+.github/workflows/deploy-smarterasp.yml
+```
+
+### Workflow Triggers
+
+The pipeline runs automatically on:
+
+- **Push to main/master**: Deploys every commit to main branch
+- **Manual trigger**: Via GitHub Actions UI (`workflow_dispatch`)
+
+```yaml
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+```
+
+## Pipeline Stages
+
+### 1. Checkout Code
+
+Clones the repository to the runner:
+
+```yaml
+- name: Checkout code
+  uses: actions/checkout@v4
+```
+
+### 2. Setup .NET Environment
+
+Installs .NET 8.0 SDK:
+
+```yaml
+- name: Setup .NET
+  uses: actions/setup-dotnet@v4
+  with:
+    dotnet-version: '8.0.x'
+```
+
+### 3. Restore Dependencies
+
+Restores NuGet packages:
+
+```yaml
+- name: Restore dependencies
+  run: dotnet restore
+```
+
+### 4. Build Application
+
+Builds the solution in Release configuration:
+
+```yaml
+- name: Build
+  run: dotnet build --configuration Release --no-restore
+```
+
+### 5. Run Tests
+
+Executes all unit and functional tests:
+
+```yaml
+- name: Test
+  run: dotnet test --no-build --verbosity normal
+```
+
+**Note**: The current workflow in the project does not include this step but can be added.
+
+### 6. Publish Application
+
+Creates deployment artifacts:
+
+```yaml
+- name: Publish
+  run: |
+    dotnet publish src/Web/Web.csproj \
+      -c Release \
+      -o ./publish \
+      -r win-x64 \
+      --self-contained false
+```
+
+### 7. Deploy via Web Deploy
+
+Deploys to SmarterASP.NET using MSDeploy:
+
+```yaml
+- name: Deploy to SmarterASP.NET via Web Deploy
+  shell: pwsh
+  run: |
+    dotnet publish src/Web/Web.csproj `
+      -c Release `
+      -p:PublishProfile=Site4now-WebDeploy `
+      -p:Password="${{ secrets.SMARTERASP_PASSWORD }}" `
+      -p:DeleteExistingFiles=True
+```
+
+## Configuration
+
+### GitHub Secrets
+
+Configure the following secrets in your GitHub repository:
+
+**Settings → Secrets and variables → Actions → New repository secret**
+
+| Secret Name | Description | Example |
+|-------------|-------------|----------|
+| `SMARTERASP_PASSWORD` | Your SmarterASP.NET password | `your-password` |
+| `CONNECTION_STRING` | Production database connection (optional) | `Server=...;Database=...` |
+| `JWT_SECRET_KEY` | Production JWT signing key (optional) | `your-32-char-key` |
+
+### Environment Variables
+
+Define workflow-level environment variables:
+
+```yaml
+env:
+  DOTNET_VERSION: '8.0.x'
+  PUBLISH_PATH: './publish'
+  ASPNETCORE_ENVIRONMENT: 'Production'
+```
+
+## Complete Workflow Example
+
+Here's the full workflow file from the project:
+
+```yaml
+name: Deploy to SmarterASP.NET
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  PUBLISH_PATH: './publish'
+
+jobs:
+  build-and-deploy:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+        
+    - name: Restore dependencies
+      run: dotnet restore
+      
+    - name: Build
+      run: dotnet build --configuration Release --no-restore
+      
+    - name: Publish
+      run: |
+        dotnet publish src/Web/Web.csproj `
+          -c Release `
+          -o ${{ env.PUBLISH_PATH }} `
+          -r win-x64 `
+          --self-contained false
+      
+    - name: Deploy to SmarterASP.NET via Web Deploy
+      shell: pwsh
+      run: |
+        dotnet publish src/Web/Web.csproj `
+          -c Release `
+          -p:PublishProfile=Site4now-WebDeploy `
+          -p:Password="${{ secrets.SMARTERASP_PASSWORD }}" `
+          -p:DeleteExistingFiles=True
+        
+        Write-Host "✅ Deployment completed. App pool will restart automatically." -ForegroundColor Green
+          
+    - name: Deployment Summary
+      if: success()
+      run: |
+        Write-Host "✅ Deployment completed successfully!" -ForegroundColor Green
+        Write-Host "🌐 Site URL: http://practicascitd-001-site1.anytempurl.com/" -ForegroundColor Cyan
+        
+    - name: Deployment Failed
+      if: failure()
+      run: |
+        Write-Host "❌ Deployment failed. Check the logs above for errors." -ForegroundColor Red
+```
+
+## Enhanced Workflow with Testing
+
+To add automated testing before deployment:
+
+```yaml
+- name: Run Unit Tests
+  run: |
+    dotnet test tests/Domain.UnitTests/Domain.UnitTests.csproj `
+      --configuration Release `
+      --no-build `
+      --verbosity normal
+
+- name: Run Application Tests
+  run: |
+    dotnet test tests/Application.UnitTests/Application.UnitTests.csproj `
+      --configuration Release `
+      --no-build `
+      --verbosity normal
+
+- name: Run Functional Tests
+  run: |
+    dotnet test tests/Application.FunctionalTests/Application.FunctionalTests.csproj `
+      --configuration Release `
+      --no-build `
+      --verbosity normal
+```
+
+## FTP Deployment Alternative
+
+If Web Deploy is not available, use FTP deployment:
+
+### Using FTP-Deploy-Action
+
+```yaml
+- name: Deploy via FTP
+  uses: SamKirkland/FTP-Deploy-Action@4.3.0
+  with:
+    server: ${{ secrets.FTP_SERVER }}
+    username: ${{ secrets.FTP_USERNAME }}
+    password: ${{ secrets.FTP_PASSWORD }}
+    local-dir: ./publish/
+    server-dir: /sistemafinanciero/
+    dangerous-clean-slate: true
+```
+
+### Required Secrets for FTP
+
+- `FTP_SERVER`: `win8145.site4now.net`
+- `FTP_USERNAME`: Your hosting username
+- `FTP_PASSWORD`: Your hosting password
+
+## Code Coverage Reports
+
+Add code coverage to your pipeline:
+
+```yaml
+- name: Run Tests with Coverage
+  run: |
+    dotnet test `
+      --configuration Release `
+      --no-build `
+      /p:CollectCoverage=true `
+      /p:CoverletOutputFormat=opencover `
+      /p:CoverletOutput=./coverage/
+
+- name: Upload Coverage to Codecov
+  uses: codecov/codecov-action@v3
+  with:
+    files: ./coverage/coverage.opencover.xml
+    fail_ci_if_error: false
+```
+
+## Multi-Environment Deployment
+
+Deploy to different environments based on branch:
+
+```yaml
+jobs:
+  deploy-staging:
+    if: github.ref == 'refs/heads/develop'
+    runs-on: windows-latest
+    environment: staging
+    steps:
+      # Deploy to staging
+      
+  deploy-production:
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    environment: production
+    steps:
+      # Deploy to production with approval
+```
+
+## Manual Approval Gates
+
+Require manual approval for production deployments:
+
+1. Go to **Settings → Environments → New environment**
+2. Create environment named `production`
+3. Enable **Required reviewers**
+4. Add reviewers who must approve deployments
+
+Update workflow:
+
+```yaml
+jobs:
+  build-and-deploy:
+    runs-on: windows-latest
+    environment: production  # Requires approval
+```
+
+## Monitoring Pipeline Status
+
+### Workflow Badges
+
+Add a status badge to your README:
+
+```markdown
+[![Deploy to SmarterASP.NET](https://github.com/your-username/SAPFIAI/actions/workflows/deploy-smarterasp.yml/badge.svg)](https://github.com/your-username/SAPFIAI/actions/workflows/deploy-smarterasp.yml)
+```
+
+### Notifications
+
+Configure notifications for failed deployments:
+
+```yaml
+- name: Notify on Failure
+  if: failure()
+  uses: 8398a7/action-slack@v3
+  with:
+    status: ${{ job.status }}
+    webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+```
+
+## Rollback Strategy
+
+Implement rollback capabilities:
+
+```yaml
+- name: Create Backup
+  run: |
+    # Backup current deployment before updating
+    # Implementation depends on hosting provider
+
+- name: Deploy New Version
+  run: |
+    # Deploy new version
+
+- name: Rollback on Failure
+  if: failure()
+  run: |
+    # Restore from backup
+```
+
+## Troubleshooting
+
+### Pipeline Fails on Build
+
+- Check .NET SDK version matches project requirements
+- Verify all NuGet packages are restorable
+- Review build logs for compilation errors
+
+### Pipeline Fails on Tests
+
+- Ensure test projects have correct references
+- Check for missing test dependencies
+- Verify test database configuration
+
+### Pipeline Fails on Deploy
+
+- Verify GitHub secrets are configured correctly
+- Check publish profile settings
+- Ensure hosting credentials are valid
+- Review deployment logs in workflow output
+
+### Deployment Succeeds but Site Doesn't Work
+
+- Check `appsettings.Production.json` configuration
+- Verify database connection string
+- Review application logs in hosting panel
+- Ensure database migrations were applied
+
+## Best Practices
+
+1. **Test Before Deploy**: Always run tests before deployment
+2. **Use Secrets**: Never hardcode credentials in workflow files
+3. **Environment-Specific Configs**: Use different settings per environment
+4. **Implement Rollback**: Have a strategy to revert failed deployments
+5. **Monitor Deployments**: Set up notifications for pipeline failures
+6. **Version Tags**: Tag releases for traceability
+7. **Branch Protection**: Require PR reviews before merging to main
+8. **Staging Environment**: Test in staging before production
+
+## Next Steps
+
+- Configure [deployment environments](https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment) in GitHub
+- Set up [branch protection rules](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)
+- Implement [semantic versioning](https://semver.org/) with automated tagging
+- Add [deployment notifications](https://github.com/marketplace/actions/slack-notify) to your team's communication tool

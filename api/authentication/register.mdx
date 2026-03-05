@@ -1,0 +1,135 @@
+---
+title: Register
+api: POST /authentication/register
+---
+
+Register a new user account in the system.
+
+## Authentication
+
+This endpoint does not require authentication.
+
+## Request Body
+
+<ParamField body="email" type="string" required>
+  User's email address. Must be a valid email format.
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  User's password. Must meet the following requirements:
+  - Minimum 8 characters
+  - At least one uppercase letter
+  - At least one lowercase letter
+  - At least one number
+  - At least one special character
+</ParamField>
+
+<ParamField body="confirmPassword" type="string" required>
+  Password confirmation. Must match the password field.
+</ParamField>
+
+<ParamField body="userName" type="string">
+  Optional username for the account.
+</ParamField>
+
+<ParamField body="phoneNumber" type="string">
+  Optional phone number for the account.
+</ParamField>
+
+## Response
+
+<ResponseField name="success" type="boolean">
+  Indicates whether the registration was successful.
+</ResponseField>
+
+<ResponseField name="userId" type="string">
+  The unique identifier of the newly created user.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  A message describing the result of the operation.
+</ResponseField>
+
+<ResponseField name="errors" type="string[]">
+  Array of error messages if registration failed.
+</ResponseField>
+
+## Error Responses
+
+<ResponseExample>
+```json 400 Bad Request - Validation Error
+{
+  "success": false,
+  "userId": null,
+  "message": "Validation failed",
+  "errors": [
+    "La contraseña debe tener al menos 8 caracteres",
+    "La contraseña debe contener al menos una letra mayúscula"
+  ]
+}
+```
+
+```json 400 Bad Request - Email Already Exists
+{
+  "success": false,
+  "userId": null,
+  "message": "Registration failed",
+  "errors": [
+    "Email is already registered"
+  ]
+}
+```
+</ResponseExample>
+
+<RequestExample>
+```bash cURL
+curl -X POST https://api.sapfiai.com/authentication/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "SecureP@ssw0rd",
+    "confirmPassword": "SecureP@ssw0rd",
+    "userName": "johndoe",
+    "phoneNumber": "+1234567890"
+  }'
+```
+
+```csharp C# Client
+using var httpClient = new HttpClient();
+var request = new RegisterCommand
+{
+    Email = "user@example.com",
+    Password = "SecureP@ssw0rd",
+    ConfirmPassword = "SecureP@ssw0rd",
+    UserName = "johndoe",
+    PhoneNumber = "+1234567890"
+};
+
+var response = await httpClient.PostAsJsonAsync(
+    "https://api.sapfiai.com/authentication/register",
+    request
+);
+
+var result = await response.Content.ReadFromJsonAsync<RegisterResponse>();
+
+if (result.Success)
+{
+    Console.WriteLine($"User registered with ID: {result.UserId}");
+}
+else
+{
+    Console.WriteLine($"Registration failed: {string.Join(", ", result.Errors)}");
+}
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Success
+{
+  "success": true,
+  "userId": "123e4567-e89b-12d3-a456-426614174000",
+  "message": "User registered successfully",
+  "errors": null
+}
+```
+</ResponseExample>

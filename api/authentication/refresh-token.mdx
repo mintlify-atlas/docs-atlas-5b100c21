@@ -1,0 +1,173 @@
+---
+title: Refresh Token
+api: POST /authentication/refresh-token
+---
+
+Obtain a new access token using a refresh token.
+
+## Authentication
+
+This endpoint does not require authentication. Use the refresh token to obtain a new access token.
+
+## Request Body
+
+<ParamField body="refreshToken" type="string" required>
+  The refresh token received during login or previous token refresh.
+</ParamField>
+
+## Response
+
+<ResponseField name="success" type="boolean">
+  Indicates whether the token refresh was successful.
+</ResponseField>
+
+<ResponseField name="token" type="string">
+  New JWT access token for authenticating subsequent requests.
+</ResponseField>
+
+<ResponseField name="refreshToken" type="string">
+  New refresh token for future token refreshes.
+</ResponseField>
+
+<ResponseField name="refreshTokenExpiry" type="string">
+  Expiration date and time of the new refresh token (ISO 8601 format).
+</ResponseField>
+
+<ResponseField name="user" type="object">
+  User information object.
+  
+  <Expandable title="user properties">
+    <ResponseField name="id" type="string">
+      User's unique identifier.
+    </ResponseField>
+    
+    <ResponseField name="email" type="string">
+      User's email address.
+    </ResponseField>
+    
+    <ResponseField name="userName" type="string">
+      User's username.
+    </ResponseField>
+    
+    <ResponseField name="phoneNumber" type="string">
+      User's phone number.
+    </ResponseField>
+    
+    <ResponseField name="twoFactorEnabled" type="boolean">
+      Indicates if two-factor authentication is enabled.
+    </ResponseField>
+    
+    <ResponseField name="lastLoginDate" type="string">
+      Date and time of last login (ISO 8601 format).
+    </ResponseField>
+    
+    <ResponseField name="lastLoginIp" type="string">
+      IP address of last login.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  A message describing the result of the operation.
+</ResponseField>
+
+<ResponseField name="errors" type="string[]">
+  Array of error messages if token refresh failed.
+</ResponseField>
+
+<ResponseField name="requires2FA" type="boolean">
+  Always false for token refresh operations.
+</ResponseField>
+
+## Error Responses
+
+<ResponseExample>
+```json 400 Bad Request - Invalid Token
+{
+  "success": false,
+  "token": null,
+  "refreshToken": null,
+  "user": null,
+  "message": "Token refresh failed",
+  "errors": [
+    "Invalid or expired refresh token"
+  ],
+  "requires2FA": false
+}
+```
+
+```json 400 Bad Request - Revoked Token
+{
+  "success": false,
+  "token": null,
+  "refreshToken": null,
+  "user": null,
+  "message": "Token refresh failed",
+  "errors": [
+    "Refresh token has been revoked"
+  ],
+  "requires2FA": false
+}
+```
+</ResponseExample>
+
+<RequestExample>
+```bash cURL
+curl -X POST https://api.sapfiai.com/authentication/refresh-token \
+  -H "Content-Type: application/json" \
+  -d '{
+    "refreshToken": "8f7d6e5c4b3a2918e7f6d5c4b3a29180"
+  }'
+```
+
+```csharp C# Client
+using var httpClient = new HttpClient();
+var request = new RefreshTokenCommand
+{
+    RefreshToken = storedRefreshToken
+};
+
+var response = await httpClient.PostAsJsonAsync(
+    "https://api.sapfiai.com/authentication/refresh-token",
+    request
+);
+
+var result = await response.Content.ReadFromJsonAsync<LoginResponse>();
+
+if (result.Success)
+{
+    Console.WriteLine("Token refreshed successfully");
+    // Update stored tokens
+    accessToken = result.Token;
+    refreshToken = result.RefreshToken;
+}
+else
+{
+    Console.WriteLine($"Token refresh failed: {string.Join(", ", result.Errors)}");
+    // Token refresh failed, user needs to login again
+}
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Success
+{
+  "success": true,
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refreshToken": "9a8e7f6d5c4b3a2918e7f6d5c4b3a29181",
+  "refreshTokenExpiry": "2026-04-05T10:30:00Z",
+  "user": {
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "email": "user@example.com",
+    "userName": "johndoe",
+    "phoneNumber": "+1234567890",
+    "twoFactorEnabled": false,
+    "lastLoginDate": "2026-03-05T10:30:00Z",
+    "lastLoginIp": "192.168.1.1"
+  },
+  "message": "Token refreshed successfully",
+  "errors": null,
+  "requires2FA": false
+}
+```
+</ResponseExample>

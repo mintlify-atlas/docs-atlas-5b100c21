@@ -1,0 +1,349 @@
+---
+title: 'Assign & Remove Roles'
+description: 'Assign roles to users and remove role assignments'
+---
+
+## Assign Role to User
+
+Assign a role to a specific user.
+
+### Endpoint
+
+```
+POST /api/Roles/assign
+```
+
+### Authorization
+
+Requires **Administrator** role.
+
+### Request Body
+
+<ParamField body="userId" type="string" required>
+  ID of the user to assign the role to
+</ParamField>
+
+<ParamField body="roleName" type="string" required>
+  Name of the role to assign (e.g., "Administrator", "User", "Manager")
+</ParamField>
+
+### Response
+
+<ResponseField name="status" type="integer">
+  HTTP status code: 204 No Content on success
+</ResponseField>
+
+### Example Request
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://api.sapfiai.com/api/Roles/assign \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": "auth0|123456789",
+    "roleName": "Manager"
+  }'
+```
+
+```csharp C#
+using System.Net.Http;
+using System.Text;
+using System.Text.Json;
+
+var client = new HttpClient();
+client.DefaultRequestHeaders.Authorization = 
+    new AuthenticationHeaderValue("Bearer", "YOUR_TOKEN");
+
+var command = new
+{
+    UserId = "auth0|123456789",
+    RoleName = "Manager"
+};
+
+var content = new StringContent(
+    JsonSerializer.Serialize(command),
+    Encoding.UTF8,
+    "application/json"
+);
+
+var response = await client.PostAsync(
+    "https://api.sapfiai.com/api/Roles/assign",
+    content
+);
+
+// Returns 204 No Content on success
+if (response.IsSuccessStatusCode)
+{
+    Console.WriteLine("Role assigned successfully");
+}
+```
+</CodeGroup>
+
+### Validation Rules
+
+- User must exist in the system
+- Role must exist in the system
+- User cannot have duplicate role assignments
+
+---
+
+## Remove Role from User
+
+Remove a role assignment from a user.
+
+### Endpoint
+
+```
+POST /api/Roles/remove
+```
+
+### Authorization
+
+Requires **Administrator** role.
+
+### Request Body
+
+<ParamField body="userId" type="string" required>
+  ID of the user to remove the role from
+</ParamField>
+
+<ParamField body="roleName" type="string" required>
+  Name of the role to remove
+</ParamField>
+
+### Response
+
+<ResponseField name="status" type="integer">
+  HTTP status code: 204 No Content on success
+</ResponseField>
+
+### Example Request
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://api.sapfiai.com/api/Roles/remove \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": "auth0|123456789",
+    "roleName": "Manager"
+  }'
+```
+
+```csharp C#
+var command = new
+{
+    UserId = "auth0|123456789",
+    RoleName = "Manager"
+};
+
+var content = new StringContent(
+    JsonSerializer.Serialize(command),
+    Encoding.UTF8,
+    "application/json"
+);
+
+var response = await client.PostAsync(
+    "https://api.sapfiai.com/api/Roles/remove",
+    content
+);
+
+// Returns 204 No Content on success
+if (response.IsSuccessStatusCode)
+{
+    Console.WriteLine("Role removed successfully");
+}
+```
+</CodeGroup>
+
+### Validation Rules
+
+- User must exist in the system
+- Role must exist in the system
+- User must currently have the role assigned
+
+---
+
+## Get User Roles
+
+Retrieve all roles assigned to a specific user.
+
+### Endpoint
+
+```
+GET /api/Roles/user/{userId}
+```
+
+### Authorization
+
+Requires **Administrator** role.
+
+### Path Parameters
+
+<ParamField path="userId" type="string" required>
+  ID of the user to retrieve roles for
+</ParamField>
+
+### Response
+
+<ResponseField name="roles" type="array">
+  Array of role names assigned to the user
+</ResponseField>
+
+### Example Request
+
+<CodeGroup>
+```bash cURL
+curl -X GET https://api.sapfiai.com/api/Roles/user/auth0|123456789 \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+```csharp C#
+var userId = "auth0|123456789";
+var response = await client.GetAsync(
+    $"https://api.sapfiai.com/api/Roles/user/{userId}"
+);
+
+var roles = await response.Content.ReadFromJsonAsync<List<string>>();
+
+foreach (var role in roles)
+{
+    Console.WriteLine($"User has role: {role}");
+}
+```
+</CodeGroup>
+
+### Example Response
+
+```json
+[
+  "User",
+  "Manager"
+]
+```
+
+---
+
+## Common Use Cases
+
+### Promote User to Administrator
+
+```csharp
+// First, get current user roles
+var currentRoles = await client.GetAsync(
+    $"https://api.sapfiai.com/api/Roles/user/{userId}"
+).Content.ReadFromJsonAsync<List<string>>();
+
+// Assign Administrator role
+var assignCommand = new
+{
+    UserId = userId,
+    RoleName = "Administrator"
+};
+
+await client.PostAsync(
+    "https://api.sapfiai.com/api/Roles/assign",
+    new StringContent(
+        JsonSerializer.Serialize(assignCommand),
+        Encoding.UTF8,
+        "application/json"
+    )
+);
+```
+
+### Revoke Administrative Access
+
+```csharp
+// Remove Administrator role
+var removeCommand = new
+{
+    UserId = userId,
+    RoleName = "Administrator"
+};
+
+await client.PostAsync(
+    "https://api.sapfiai.com/api/Roles/remove",
+    new StringContent(
+        JsonSerializer.Serialize(removeCommand),
+        Encoding.UTF8,
+        "application/json"
+    )
+);
+
+// Verify removal
+var updatedRoles = await client.GetAsync(
+    $"https://api.sapfiai.com/api/Roles/user/{userId}"
+).Content.ReadFromJsonAsync<List<string>>();
+```
+
+### Batch Role Assignment
+
+```csharp
+var usersToPromote = new[] 
+{ 
+    "auth0|123456789", 
+    "auth0|987654321" 
+};
+
+foreach (var userId in usersToPromote)
+{
+    var command = new
+    {
+        UserId = userId,
+        RoleName = "Manager"
+    };
+
+    await client.PostAsync(
+        "https://api.sapfiai.com/api/Roles/assign",
+        new StringContent(
+            JsonSerializer.Serialize(command),
+            Encoding.UTF8,
+            "application/json"
+        )
+    );
+}
+```
+
+## Error Responses
+
+<ResponseField name="400" type="error">
+  Bad Request - Invalid request parameters, user not found, or role not found
+  
+  ```json
+  {
+    "errors": {
+      "UserId": ["User not found"],
+      "RoleName": ["Role not found"]
+    }
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="403" type="error">
+  Forbidden - User does not have Administrator role
+</ResponseField>
+
+<ResponseField name="409" type="error">
+  Conflict - Role already assigned (for assign) or role not assigned (for remove)
+</ResponseField>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Verify Before Assigning">
+    Always check if a user already has a role before assigning it to avoid unnecessary API calls and potential errors.
+  </Accordion>
+  
+  <Accordion title="Audit Role Changes">
+    Log all role assignments and removals for security auditing purposes. Consider implementing a webhook or event system to track these changes.
+  </Accordion>
+  
+  <Accordion title="Handle Errors Gracefully">
+    Always check response status codes and handle errors appropriately. A 400 error may indicate the user or role doesn't exist.
+  </Accordion>
+  
+  <Accordion title="Use Role Names Consistently">
+    Role names are case-sensitive in the request but matched case-insensitively. Use the predefined role constants: "Administrator", "User", "Manager".
+  </Accordion>
+</AccordionGroup>

@@ -1,0 +1,476 @@
+---
+title: Database Migrations
+description: Manage your database schema with Entity Framework Core migrations
+---
+
+SAPFIAI uses Entity Framework Core for database access and migrations. This guide covers the complete workflow for managing your database schema.
+
+## Overview
+
+Migrations are stored in `src/Infrastructure/Data/Migrations/` and track changes to your database schema over time. Each migration is a C# class that describes how to apply and revert schema changes.
+
+## Prerequisites
+
+Ensure you have the EF Core tools installed:
+
+```bash
+dotnet tool install --global dotnet-ef
+```
+
+Or update to the latest version:
+
+```bash
+dotnet tool update --global dotnet-ef
+```
+
+## Creating Migrations
+
+After modifying entities in the `Domain` layer or configurations in `Infrastructure`, create a migration to capture the changes.
+
+### Basic Syntax
+
+```bash
+dotnet ef migrations add "MigrationName" \
+  --project src/Infrastructure \
+  --startup-project src/Web \
+  --output-dir Data/Migrations
+```
+
+### Parameters Explained
+
+<ParamField path="--project" required>
+  The project containing your `DbContext` (Infrastructure)
+</ParamField>
+
+<ParamField path="--startup-project" required>
+  The project with your connection string configuration (Web)
+</ParamField>
+
+<ParamField path="--output-dir" required>
+  Where to generate migration files (Data/Migrations)
+</ParamField>
+
+### Migration Naming Conventions
+
+Use descriptive names that indicate what changed:
+
+```bash
+# Good examples
+dotnet ef migrations add "AddUserEmailIndex" --project src/Infrastructure --startup-project src/Web --output-dir Data/Migrations
+dotnet ef migrations add "UpdatePermissionModuleLength" --project src/Infrastructure --startup-project src/Web --output-dir Data/Migrations
+dotnet ef migrations add "CreateAuditLogTable" --project src/Infrastructure --startup-project src/Web --output-dir Data/Migrations
+
+# Avoid generic names
+dotnet ef migrations add "Update1" --project src/Infrastructure --startup-project src/Web --output-dir Data/Migrations
+```
+
+## Migration Files
+
+Each migration creates two files in `src/Infrastructure/Data/Migrations/`:
+
+### Migration Class
+
+`20260215221946_InitialCreate.cs`:
+
+```csharp
+using Microsoft.EntityFrameworkCore.Migrations;
+
+namespace SAPFIAI.Infrastructure.Data.Migrations
+{
+    public partial class InitialCreate : Migration
+    {
+        protected override void Up(MigrationBuilder migrationBuilder)
+        {
+            // Apply changes
+            migrationBuilder.CreateTable(
+                name: "Permissions",
+                columns: table => new
+                {
+                    Id = table.Column<int>(nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Name = table.Column<string>(maxLength: 100, nullable: false),
+                    Module = table.Column<string>(maxLength: 50, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Permissions", x => x.Id);
+                });
+        }
+
+        protected override void Down(MigrationBuilder migrationBuilder)
+        {
+            // Revert changes
+            migrationBuilder.DropTable(name: "Permissions");
+        }
+    }
+}
+```
+
+### Designer File
+
+`20260215221946_InitialCreate.Designer.cs` contains metadata about the model state.
+
+<Warning>
+  Never manually edit Designer files. Always use EF Core commands to modify migrations.
+</Warning>
+
+## Applying Migrations
+
+Apply pending migrations to update your database schema.
+
+### Apply All Pending Migrations
+
+```bash
+dotnet ef database update \
+  --project src/Infrastructure \
+  --startup-project src/Web
+```
+
+This applies all migrations that haven't been applied yet.
+
+### Apply Specific Migration
+
+Rollback or roll forward to a specific migration:
+
+```bash
+# Rollback to specific migration
+dotnet ef database update MigrationName \
+  --project src/Infrastructure \
+  --startup-project src/Web
+
+# Rollback all migrations
+dotnet ef database update 0 \
+  --project src/Infrastructure \
+  --startup-project src/Web
+```
+
+### Development Environment
+
+In development, migrations can be applied automatically on startup. The application checks the environment in `Program.cs:56`:
+
+```csharp
+if (app.Environment.IsDevelopment() && !skipDatabaseInitialization)
+{
+    app.UseDeveloperExceptionPage();
+    await app.InitialiseDatabaseAsync();
+}
+```
+
+<Tip>
+  Set the `SKIP_DB_INIT` environment variable to `true` to disable automatic migrations during development.
+</Tip>
+
+## Generating SQL Scripts
+
+For production deployments, generate SQL scripts instead of applying migrations directly.
+
+### Generate Complete Script
+
+```bash
+dotnet ef migrations script \
+  --project src/Infrastructure \
+  --startup-project src/Web \
+  --output migration.sql
+```
+
+This creates a SQL script with all migrations.
+
+### Generate Incremental Script
+
+Generate a script for migrations between two points:
+
+```bash
+# From specific migration to latest
+dotnet ef migrations script FromMigration \
+  --project src/Infrastructure \
+  --startup-project src/Web \
+  --output incremental.sql
+
+# Between two migrations
+dotnet ef migrations script FromMigration ToMigration \
+  --project src/Infrastructure \
+  --startup-project src/Web \
+  --output incremental.sql
+```
+
+### Idempotent Scripts
+
+Generate scripts that can be run multiple times safely:
+
+```bash
+dotnet ef migrations script \
+  --project src/Infrastructure \
+  --startup-project src/Web \
+  --output migration.sql \
+  --idempotent
+```
+
+<Note>
+  Idempotent scripts include checks to skip migrations that have already been applied.
+</Note>
+
+## Removing Migrations
+
+Remove the last migration if it hasn't been applied to any database yet.
+
+```bash
+dotnet ef migrations remove \
+  --project src/Infrastructure \
+  --startup-project src/Web
+```
+
+<Warning>
+  Never remove a migration that has been:
+  - Applied to any database (dev, staging, or production)
+  - Committed to source control and shared with the team
+  - Deployed to any environment
+  
+  Instead, create a new migration to revert the changes.
+</Warning>
+
+## Migration Workflow
+
+Follow this workflow when making database changes:
+
+<Steps>
+  <Step title="Modify Domain Entities">
+    Update entity classes in `src/Domain/Entities/` or add new ones.
+    
+    ```csharp
+    public class Permission
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        // Add new property
+        public string Category { get; set; } = "General";
+    }
+    ```
+  </Step>
+
+  <Step title="Update Entity Configuration (Optional)">
+    If needed, add or modify entity configurations in `src/Infrastructure/Data/Configurations/`.
+    
+    ```csharp
+    public class PermissionConfiguration : IEntityTypeConfiguration<Permission>
+    {
+        public void Configure(EntityTypeBuilder<Permission> builder)
+        {
+            builder.Property(p => p.Category)
+                .HasMaxLength(50)
+                .IsRequired();
+        }
+    }
+    ```
+  </Step>
+
+  <Step title="Create Migration">
+    ```bash
+    dotnet ef migrations add "AddPermissionCategory" \
+      --project src/Infrastructure \
+      --startup-project src/Web \
+      --output-dir Data/Migrations
+    ```
+  </Step>
+
+  <Step title="Review Generated Migration">
+    Open the migration file and verify the changes are correct. Make manual adjustments if needed.
+  </Step>
+
+  <Step title="Test Migration">
+    ```bash
+    # Apply migration
+    dotnet ef database update --project src/Infrastructure --startup-project src/Web
+    
+    # Test your application
+    dotnet run --project src/Web
+    
+    # If issues found, rollback and fix
+    dotnet ef database update PreviousMigration --project src/Infrastructure --startup-project src/Web
+    ```
+  </Step>
+
+  <Step title="Commit Changes">
+    ```bash
+    git add src/Domain/ src/Infrastructure/
+    git commit -m "Add Category field to Permission entity"
+    ```
+  </Step>
+</Steps>
+
+## Configuration
+
+### Connection Strings
+
+Connection strings are configured in `appsettings.json`:
+
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=(localdb)\\mssqllocaldb;Database=SAPFIAIDb;Trusted_Connection=True;MultipleActiveResultSets=true"
+  }
+}
+```
+
+For production, override in `appsettings.Production.json` or use environment variables:
+
+```bash
+export ConnectionStrings__DefaultConnection="Server=prod-server;Database=SAPFIAIDb;User Id=app_user;Password=***"
+```
+
+### Multiple Databases
+
+If using different databases per environment:
+
+```bash
+# Development (SQL Server LocalDB)
+dotnet ef database update --project src/Infrastructure --startup-project src/Web
+
+# Production (specify connection at runtime)
+dotnet ef database update \
+  --project src/Infrastructure \
+  --startup-project src/Web \
+  --connection "Server=prod;Database=SAPFIAIDb;User Id=sa;Password=***"
+```
+
+## Common Scenarios
+
+<AccordionGroup>
+  <Accordion title="Adding a New Table">
+    1. Create entity in `src/Domain/Entities/NewEntity.cs`
+    2. Add `DbSet<NewEntity>` to `ApplicationDbContext`
+    3. Create migration: `dotnet ef migrations add "CreateNewEntityTable" --project src/Infrastructure --startup-project src/Web --output-dir Data/Migrations`
+    4. Apply: `dotnet ef database update --project src/Infrastructure --startup-project src/Web`
+  </Accordion>
+
+  <Accordion title="Adding a Column">
+    1. Add property to entity class
+    2. Create migration: `dotnet ef migrations add "AddColumnToEntity" --project src/Infrastructure --startup-project src/Web --output-dir Data/Migrations`
+    3. Apply: `dotnet ef database update --project src/Infrastructure --startup-project src/Web`
+  </Accordion>
+
+  <Accordion title="Renaming a Column">
+    1. Rename property in entity
+    2. Create migration: `dotnet ef migrations add "RenameColumn" --project src/Infrastructure --startup-project src/Web --output-dir Data/Migrations`
+    3. Edit migration to use `RenameColumn` instead of `DropColumn` + `AddColumn`:
+    ```csharp
+    migrationBuilder.RenameColumn(
+        name: "OldName",
+        table: "TableName",
+        newName: "NewName");
+    ```
+    4. Apply: `dotnet ef database update --project src/Infrastructure --startup-project src/Web`
+  </Accordion>
+
+  <Accordion title="Data Migrations">
+    Migrations can include data updates:
+    ```csharp
+    protected override void Up(MigrationBuilder migrationBuilder)
+    {
+        // Schema changes
+        migrationBuilder.AddColumn<string>(
+            name: "Category",
+            table: "Permissions",
+            nullable: false,
+            defaultValue: "General");
+        
+        // Data migration
+        migrationBuilder.Sql(
+            "UPDATE Permissions SET Category = 'Security' WHERE Module = 'Auth'");
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+### "No migrations configuration type was found"
+
+Ensure you're specifying both `--project` and `--startup-project`:
+
+```bash
+dotnet ef migrations add "Migration" \
+  --project src/Infrastructure \
+  --startup-project src/Web
+```
+
+### "A connection was not found"
+
+Verify your connection string in `appsettings.json` and ensure SQL Server is running:
+
+```bash
+# Check connection string
+cat src/Web/appsettings.json | grep ConnectionStrings
+
+# Test connection (if using LocalDB)
+sqllocaldb info
+```
+
+### "The migration has already been applied"
+
+Check applied migrations:
+
+```bash
+dotnet ef migrations list --project src/Infrastructure --startup-project src/Web
+```
+
+### Pending Model Changes
+
+Check if there are pending model changes:
+
+```bash
+dotnet ef migrations has-pending-model-changes \
+  --project src/Infrastructure \
+  --startup-project src/Web
+```
+
+## Production Deployment
+
+For production deployments:
+
+<Steps>
+  <Step title="Generate SQL Script">
+    ```bash
+    dotnet ef migrations script \
+      --project src/Infrastructure \
+      --startup-project src/Web \
+      --output migration_script.sql \
+      --idempotent
+    ```
+  </Step>
+
+  <Step title="Review Script">
+    Manually review the generated SQL for any potential issues or data loss.
+  </Step>
+
+  <Step title="Test on Staging">
+    Apply the script to a staging environment first:
+    ```bash
+    sqlcmd -S staging-server -d SAPFIAIDb -i migration_script.sql
+    ```
+  </Step>
+
+  <Step title="Backup Production">
+    Always backup the production database before applying migrations.
+  </Step>
+
+  <Step title="Apply to Production">
+    ```bash
+    sqlcmd -S prod-server -d SAPFIAIDb -i migration_script.sql
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+  Never run `dotnet ef database update` directly against production. Always use SQL scripts for production deployments.
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Creating Use Cases" icon="code" href="/development/creating-use-cases">
+    Learn how to implement CQRS commands and queries
+  </Card>
+  <Card title="Testing" icon="flask" href="/development/testing">
+    Test your database interactions
+  </Card>
+</CardGroup>

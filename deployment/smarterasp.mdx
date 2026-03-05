@@ -1,0 +1,301 @@
+---
+title: Deploy to SmarterASP.NET
+description: Step-by-step guide for deploying SAPFIAI to SmarterASP.NET / Site4now.net hosting
+---
+
+This guide covers deploying the SAPFIAI Clean Architecture API to SmarterASP.NET (Site4now.net), a Windows hosting provider with .NET 8.0 and SQL Server support.
+
+## Prerequisites
+
+- Active SmarterASP.NET or Site4now.net hosting account
+- SQL Server database provisioned
+- FTP or Web Deploy credentials from your hosting panel
+- .NET 8.0 SDK installed locally
+
+## Deployment Methods
+
+SmarterASP.NET supports multiple deployment methods:
+
+1. **Web Deploy (MS Deploy)** - Recommended, fastest method
+2. **FTP Upload** - Manual upload via FTP client
+3. **GitHub Actions CI/CD** - Automated deployment (see [CI/CD guide](/deployment/cicd))
+
+## Method 1: Web Deploy (Recommended)
+
+### Step 1: Configure Publish Profile
+
+The project includes a pre-configured Web Deploy profile at:
+```
+src/Web/Properties/PublishProfiles/Site4now-WebDeploy.pubxml
+```
+
+Update the profile with your hosting details:
+
+```xml
+<PropertyGroup>
+  <MSDeployServiceURL>https://your-server.site4now.net:8172/msdeploy.axd?site=your-site</MSDeployServiceURL>
+  <DeployIisAppPath>your-site-name</DeployIisAppPath>
+  <UserName>your-username</UserName>
+  <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+  <SelfContained>false</SelfContained>
+  <DeleteExistingFiles>True</DeleteExistingFiles>
+</PropertyGroup>
+```
+
+### Step 2: Publish via Visual Studio
+
+1. Right-click the `Web` project in Solution Explorer
+2. Select **Publish...**
+3. Choose **Site4now-WebDeploy** profile
+4. Enter your password when prompted
+5. Click **Publish**
+
+### Step 3: Publish via CLI
+
+```bash
+dotnet publish src/Web/Web.csproj \
+  -c Release \
+  -p:PublishProfile=Site4now-WebDeploy \
+  -p:Password="your-password" \
+  -p:DeleteExistingFiles=True
+```
+
+The application pool will restart automatically after deployment.
+
+## Method 2: FTP Upload
+
+### Step 1: Publish Application Locally
+
+Publish the application to a local folder:
+
+```bash
+dotnet publish src/Web/Web.csproj \
+  -c Release \
+  -o ./publish \
+  -r win-x64 \
+  --self-contained false
+```
+
+This creates optimized production files in the `./publish` directory.
+
+### Step 2: Connect via FTP
+
+Use an FTP client (FileZilla, WinSCP, etc.) with your hosting credentials:
+
+- **Host**: Your FTP server (e.g., `win8145.site4now.net`)
+- **Port**: 21
+- **Username**: Your hosting username
+- **Password**: Your hosting password
+- **Protocol**: FTP or FTPS
+- **Transfer Mode**: Passive (recommended)
+
+### Step 3: Upload Files
+
+1. Navigate to your site's root directory (e.g., `/sistemafinanciero` or `/wwwroot`)
+2. **Delete existing files** in the directory to avoid conflicts
+3. Upload all contents from `./publish` folder
+4. Ensure `web.config` is uploaded correctly
+5. Wait for upload to complete (may take 5-10 minutes)
+
+### Step 4: Set Folder Permissions
+
+Ensure the following folders have write permissions:
+- `App_Data` (if exists)
+- Any folders for file uploads or logs
+
+## SQL Server Configuration
+
+### Step 1: Get Database Connection String
+
+From your SmarterASP.NET control panel:
+
+1. Navigate to **SQL Server Databases**
+2. Note your database details:
+   - Server name
+   - Database name
+   - Username
+   - Password
+
+Connection string format:
+```
+Server=your-server;Database=your-db;User Id=your-user;Password=your-pass;MultipleActiveResultSets=true;TrustServerCertificate=true
+```
+
+### Step 2: Configure Production Settings
+
+Update `appsettings.Production.json` before publishing:
+
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=your-server;Database=SAPFIAIDb;User Id=user;Password=pass;MultipleActiveResultSets=true;TrustServerCertificate=true"
+  },
+  "Jwt": {
+    "Key": "your-secure-production-jwt-key-min-32-characters",
+    "Issuer": "SAPFIAI",
+    "Audience": "SAPFIAI-Users",
+    "ExpireMinutes": "60"
+  },
+  "App": {
+    "BaseUrl": "https://yourdomain.com"
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Warning",
+      "Microsoft": "Warning",
+      "Microsoft.Hosting.Lifetime": "Information"
+    }
+  },
+  "AllowedHosts": "*"
+}
+```
+
+### Step 3: Apply Database Migrations
+
+#### Option A: Generate SQL Script
+
+1. Generate migration script locally:
+   ```bash
+   dotnet ef migrations script \
+     --project src/Infrastructure \
+     --startup-project src/Web \
+     --output migration.sql
+   ```
+
+2. Execute via SQL Management Studio:
+   - Download **SQL Server Management Studio (SSMS)** or **Azure Data Studio**
+   - Connect to your SmarterASP.NET SQL Server
+   - Open `migration.sql` and execute
+
+#### Option B: Use SmarterASP Control Panel
+
+1. Go to **SQL Server** section in control panel
+2. Open **Query Analyzer** or **SQL Web Admin**
+3. Paste and execute the migration script
+
+#### Option C: Remote Connection (if enabled)
+
+If remote connections are enabled:
+
+```bash
+dotnet ef database update \
+  --project src/Infrastructure \
+  --startup-project src/Web \
+  --connection "Server=your-server;Database=SAPFIAIDb;User Id=user;Password=pass;MultipleActiveResultSets=true"
+```
+
+## Production Settings Review
+
+### Security Configuration
+
+Ensure the following security settings are properly configured:
+
+- **JWT Key**: Use a strong, unique key (minimum 32 characters)
+- **CORS**: Configure allowed origins if needed
+- **HTTPS**: Enable SSL certificate in hosting panel
+- **Connection Strings**: Never commit production credentials
+
+### Performance Optimization
+
+- **Logging Level**: Set to `Warning` or `Error` in production
+- **Response Compression**: Enabled by default in ASP.NET Core
+- **Static File Caching**: Configured automatically
+- **Database Connection Pooling**: Enabled by default in EF Core
+
+## Verification Steps
+
+After deployment, verify the application is working correctly:
+
+### 1. Check Health Endpoint
+
+Access: `https://yourdomain.com/health`
+
+Expected response:
+```
+Healthy
+```
+
+### 2. Access Swagger UI
+
+Access: `https://yourdomain.com/swagger`
+
+You should see the API documentation. Consider disabling Swagger in production:
+
+```csharp
+// In Program.cs
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+```
+
+### 3. Test API Endpoints
+
+Test a simple endpoint to verify database connectivity:
+
+```bash
+curl https://yourdomain.com/api/your-endpoint
+```
+
+### 4. Test Authentication
+
+If using JWT authentication, test token generation and validation.
+
+### 5. Review Logs
+
+Check application logs in your hosting panel:
+- Navigate to **Log Files** section
+- Review `stdout.log` and error logs
+- Look for any startup errors or connection issues
+
+## Troubleshooting
+
+### Application Won't Start
+
+- Check `stdout.log` in hosting panel
+- Verify .NET 8.0 runtime is enabled in control panel
+- Ensure `web.config` is present and correct
+- Verify connection string is valid
+
+### Database Connection Errors
+
+- Verify SQL Server credentials
+- Check firewall rules (if using remote connections)
+- Add `TrustServerCertificate=true` to connection string
+- Ensure database exists and migrations are applied
+
+### 500 Internal Server Error
+
+- Enable detailed errors temporarily:
+  ```json
+  "DetailedErrors": true,
+  "ASPNETCORE_ENVIRONMENT": "Development"
+  ```
+- Review logs for stack traces
+- Verify all required dependencies are published
+
+### FTP Upload Issues
+
+- Use **Passive Mode** in FTP client
+- Delete old files before uploading new ones
+- Verify folder permissions
+- Ensure `web.config` is uploaded correctly
+
+## Updating the Application
+
+To deploy updates:
+
+1. Set `DeleteExistingFiles` to `True` in publish profile
+2. Publish using Web Deploy or FTP
+3. The application pool restarts automatically
+4. Verify deployment with health check endpoint
+
+**Note**: Web Deploy automatically takes the application offline during deployment using `app_offline.htm`.
+
+## Next Steps
+
+- [Set up CI/CD automation](/deployment/cicd) for streamlined deployments
+- Configure custom domain and SSL certificate
+- Set up monitoring and alerting
+- Implement backup strategy for database

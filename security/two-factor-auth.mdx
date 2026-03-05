@@ -1,0 +1,420 @@
+---
+title: Two-Factor Authentication
+description: Implementing two-factor authentication (2FA) with email verification in SAPFIAI
+---
+
+## Overview
+
+SAPFIAI implements two-factor authentication (2FA) using time-based codes sent via email. This adds an additional security layer to the authentication process.
+
+## TwoFactorService
+
+The `TwoFactorService` handles all 2FA operations including code generation, validation, and delivery.
+
+**Location:** `src/Infrastructure/Services/TwoFactorService.cs:17`
+
+### Dependencies
+
+```csharp
+public class TwoFactorService : ITwoFactorService
+{
+    private readonly IEmailService _emailService;
+    private readonly IConfiguration _configuration;
+    private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IWebHostEnvironment _environment;
+    private readonly ILogger<TwoFactorService> _logger;
+    private readonly IMemoryCache _cache;
+}
+```
+
+## Configuration
+
+Configure 2FA settings in `appsettings.json` or environment variables:
+
+```json
+{
+  "TWO_FACTOR_EXPIRATION_MINUTES": "10"
+}
+```
+
+**Default:** Codes expire after 10 minutes
+
+## Two-Factor Flow
+
+### 1. User Login with 2FA Enabled
+
+When a user with 2FA enabled attempts to login:
+
+```http
+POST /api/authentication/login
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "password123"
+}
+```
+
+**Response when 2FA is required:**
+
+```json
+{
+  "success": true,
+  "requires2FA": true,
+  "token": "temporary-jwt-token-with-2fa-pending-claim",
+  "message": "Two-factor authentication required"
+}
+```
+
+### 2. Generate and Send 2FA Code
+
+The system automatically generates and sends a 6-digit code:
+
+```csharp
+public async Task<bool> GenerateAndSendTwoFactorCodeAsync(string userId)
+```
+
+**Implementation details:**
+
+```csharp:src/Infrastructure/Services/TwoFactorService.cs
+private static string GenerateRandomCode(int length)
+{
+    using var rng = RandomNumberGenerator.Create();
+    var bytes = new byte[length];
+    rng.GetBytes(bytes);
+    return string.Concat(bytes.Select(b => (b % 10).ToString()));
+}
+```
+
+**Features:**
+- Generates cryptographically secure 6-digit code
+- Stores code in memory cache with expiration
+- Sends code via email using `IEmailService`
+- In development: Shows code in console logs
+
+**Development mode behavior:**
+
+```
+═══════════════════════════════════════════════════════════
+  🔐 CÓDIGO 2FA (SOLO DESARROLLO): 123456
+  📧 Usuario: user@example.com
+  ⏰ Expira en: 10 minutos
+═══════════════════════════════════════════════════════════
+```
+
+### 3. User Submits Verification Code
+
+```http
+POST /api/authentication/verify-2fa
+Content-Type: application/json
+
+{
+  "userId": "user-123",
+  "code": "123456"
+}
+```
+
+### 4. Validate 2FA Code
+
+```csharp
+public async Task<bool> ValidateTwoFactorCodeAsync(string userId, string code)
+```
+
+**Validation process:**
+
+```csharp:src/Infrastructure/Services/TwoFactorService.cs
+// Timing-safe comparison to prevent timing attacks
+var expectedBytes = Encoding.UTF8.GetBytes(cachedCode);
+var providedBytes = Encoding.UTF8.GetBytes(code.Trim());
+
+if (expectedBytes.Length != providedBytes.Length ||
+    !CryptographicOperations.FixedTimeEquals(expectedBytes, providedBytes))
+{
+    return false;
+}
+```
+
+**Security features:**
+- Constant-time comparison prevents timing attacks
+- Code retrieved from memory cache
+- Automatic expiration after configured time
+- Case and whitespace handling
+
+**Success response:**
+
+```json
+{
+  "success": true,
+  "token": "full-access-jwt-token",
+  "refreshToken": "refresh-token...",
+  "user": {
+    "id": "user-123",
+    "email": "user@example.com"
+  }
+}
+```
+
+### 5. Clear 2FA Code
+
+After successful validation or on failure:
+
+```csharp
+public Task ClearTwoFactorCodeAsync(string userId)
+{
+    _cache.Remove(GetCacheKey(userId));
+    return Task.CompletedTask;
+}
+```
+
+## Enabling 2FA for Users
+
+### Enable 2FA Endpoint
+
+```http
+POST /api/authentication/enable-2fa
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "enable": true
+}
+```
+
+**Implementation:** `src/Web/Endpoints/Authentication.cs:212`
+
+### Check 2FA Status
+
+```csharp
+public async Task<bool> IsTwoFactorEnabledAsync(string userId)
+{
+    var user = await _userManager.FindByIdAsync(userId);
+    return user?.IsTwoFactorEnabled ?? false;
+}
+```
+
+**Example:**
+
+```csharp
+if (await _twoFactorService.IsTwoFactorEnabledAsync(userId))
+{
+    // Generate and send 2FA code
+    await _twoFactorService.GenerateAndSendTwoFactorCodeAsync(userId);
+}
+```
+
+## JWT Integration
+
+When 2FA is pending, the JWT token includes a special claim:
+
+```csharp:src/Infrastructure/Services/JwtTokenGenerator.cs
+var claims = new List<Claim>
+{
+    new(JwtRegisteredClaimNames.Sub, userId),
+    new(JwtRegisteredClaimNames.Email, email),
+    new("2fa_pending", requiresTwoFactorVerification.ToString().ToLower())
+};
+```
+
+**Checking 2FA requirement from token:**
+
+```csharp
+public bool RequiresTwoFactorVerification(string token)
+{
+    var principal = ValidateAndGetPrincipal(token);
+    var claim = principal?.FindFirst("2fa_pending");
+    return claim?.Value == "true";
+}
+```
+
+## API Endpoints
+
+### Enable Two-Factor Authentication
+
+```http
+POST /api/authentication/enable-2fa
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "enable": true
+}
+```
+
+**Response:**
+
+```json
+{
+  "succeeded": true,
+  "message": "Two-factor authentication enabled successfully"
+}
+```
+
+### Verify Two-Factor Code
+
+```http
+POST /api/authentication/verify-2fa
+Content-Type: application/json
+
+{
+  "userId": "user-123",
+  "code": "123456"
+}
+```
+
+**Success Response:**
+
+```json
+{
+  "success": true,
+  "token": "full-jwt-token...",
+  "refreshToken": "refresh-token...",
+  "refreshTokenExpiry": "2024-01-15T10:00:00Z",
+  "user": {
+    "id": "user-123",
+    "email": "user@example.com"
+  }
+}
+```
+
+**Error Response:**
+
+```json
+{
+  "success": false,
+  "message": "Invalid or expired verification code",
+  "errors": ["The provided code is invalid or has expired"]
+}
+```
+
+## Complete Authentication Flow
+
+### Client-Side Implementation Example
+
+```typescript
+// 1. Initial login
+const loginResponse = await fetch('/api/authentication/login', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ email, password })
+});
+
+const loginData = await loginResponse.json();
+
+if (loginData.requires2FA) {
+  // 2. Show 2FA code input
+  const code = await promptUserFor2FACode();
+  
+  // 3. Verify 2FA code
+  const verify2FAResponse = await fetch('/api/authentication/verify-2fa', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ 
+      userId: loginData.user.id,
+      code 
+    })
+  });
+  
+  const verify2FAData = await verify2FAResponse.json();
+  
+  if (verify2FAData.success) {
+    // 4. Store tokens and proceed
+    storeTokens(verify2FAData.token, verify2FAData.refreshToken);
+    redirectToDashboard();
+  }
+} else {
+  // No 2FA required, proceed directly
+  storeTokens(loginData.token, loginData.refreshToken);
+  redirectToDashboard();
+}
+```
+
+## Security Considerations
+
+### Code Generation
+
+- Uses `RandomNumberGenerator` for cryptographic randomness
+- 6-digit codes provide 1,000,000 possible combinations
+- Short expiration time (10 minutes) limits brute-force attempts
+
+### Code Validation
+
+- Constant-time comparison prevents timing attacks
+- Code is removed from cache after validation
+- No indication whether code was wrong or expired
+
+### Storage
+
+- Codes stored in memory cache (not database)
+- Automatic expiration through cache policy
+- Cleared immediately after use
+
+### Rate Limiting
+
+Consider implementing rate limiting on 2FA endpoints:
+
+```csharp
+// Limit 2FA verification attempts
+[RateLimit(PermitLimit = 5, Window = 15)] // 5 attempts per 15 minutes
+public async Task<ValidateTwoFactorResponse> VerifyTwoFactor(...)
+```
+
+## Development vs Production
+
+### Development Mode
+
+- Codes logged to console for easy testing
+- Email failures don't block authentication
+- Shorter expiration times acceptable
+
+### Production Mode
+
+- Email delivery required
+- No console logging of codes
+- Consider SMS or authenticator app alternatives
+- Monitor failed 2FA attempts
+
+## Audit Logging
+
+All 2FA events are logged to audit logs:
+
+```csharp
+// 2FA enabled
+await _auditLogService.LogActionAsync(
+    userId,
+    "TWO_FACTOR_ENABLED",
+    ipAddress,
+    userAgent
+);
+
+// 2FA validated
+await _auditLogService.LogActionAsync(
+    userId,
+    "TWO_FACTOR_VALIDATED",
+    ipAddress,
+    userAgent
+);
+
+// 2FA failed
+await _auditLogService.LogActionAsync(
+    userId,
+    "TWO_FACTOR_FAILED",
+    ipAddress,
+    userAgent,
+    status: "FAILED"
+);
+```
+
+## Implementation Details
+
+**File locations:**
+- TwoFactorService: `src/Infrastructure/Services/TwoFactorService.cs:17`
+- Enable 2FA Command: `src/Application/Users/Commands/EnableTwoFactor/`
+- Validate 2FA Command: `src/Application/Users/Commands/ValidateTwoFactor/`
+- Verify Endpoint: `src/Web/Endpoints/Authentication.cs:126`
+- Enable Endpoint: `src/Web/Endpoints/Authentication.cs:212`
+
+## See Also
+
+- [JWT Authentication](/security/jwt-authentication)
+- [Audit Logs](/security/audit-logs)
+- [IP Blocking](/security/ip-blocking)

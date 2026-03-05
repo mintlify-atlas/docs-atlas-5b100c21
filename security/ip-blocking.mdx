@@ -1,0 +1,505 @@
+---
+title: IP Blocking
+description: IP blocking and blacklist management system in SAPFIAI Clean Architecture
+---
+
+## Overview
+
+SAPFIAI implements an IP blocking system to protect against malicious actors, brute-force attacks, and abuse. The system uses middleware to intercept requests and a service layer for managing blocked IPs.
+
+## IpBlackList Entity
+
+The domain entity represents a blocked IP address.
+
+**Location:** `src/Domain/Entities/IpBlackList.cs:3`
+
+```csharp
+public class IpBlackList : BaseEntity
+{
+    public string IpAddress { get; private set; }
+    public string Reason { get; private set; }
+    public DateTime BlockedDate { get; private set; }
+    public DateTime? ExpiryDate { get; private set; }
+    public string? BlockedBy { get; private set; }
+    public string? Notes { get; private set; }
+    public BlackListReason BlackListReason { get; private set; }
+    
+    public bool IsActive => ExpiryDate == null || DateTime.UtcNow < ExpiryDate;
+}
+```
+
+### BlackListReason Enum
+
+**Location:** `src/Domain/Enums/AuthEnums.cs:69`
+
+```csharp
+public enum BlackListReason
+{
+    ManualBlock,          // Manually blocked by admin
+    TooManyAttempts,      // Automatic block due to failed login attempts
+    SuspiciousActivity,   // Detected suspicious behavior
+    ReportedAbuse         // Reported by users or system
+}
+```
+
+### Creating a Block
+
+```csharp
+var ipBlock = IpBlackList.Block(
+    ipAddress: "192.168.1.100",
+    reason: "Too many failed login attempts",
+    expiryDate: DateTime.UtcNow.AddHours(24), // 24-hour block
+    blockedBy: "system",
+    notes: "Automated block after 5 failed attempts",
+    blackListReason: BlackListReason.TooManyAttempts
+);
+```
+
+### Unblocking an IP
+
+```csharp
+ipBlock.Unblock(); // Sets ExpiryDate to now
+```
+
+## IpBlockingMiddleware
+
+Middleware that intercepts all requests and checks if the IP is blocked.
+
+**Location:** `src/Web/Middleware/IpBlockingMiddleware.cs:5`
+
+### Implementation
+
+```csharp
+public class IpBlockingMiddleware
+{
+    private readonly RequestDelegate _next;
+    private readonly ILogger<IpBlockingMiddleware> _logger;
+
+    public async Task InvokeAsync(
+        HttpContext context, 
+        IIpBlackListService ipBlackListService)
+    {
+        var ipAddress = context.Connection.RemoteIpAddress?.ToString();
+
+        if (!string.IsNullOrEmpty(ipAddress))
+        {
+            var isBlocked = await ipBlackListService.IsIpBlockedAsync(ipAddress);
+
+            if (isBlocked)
+            {
+                var blockInfo = await ipBlackListService.GetBlockInfoAsync(ipAddress);
+
+                _logger.LogWarning(
+                    "Intento de acceso desde IP bloqueada: {IpAddress}", 
+                    ipAddress
+                );
+
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                context.Response.Headers["X-Block-Reason"] = 
+                    blockInfo?.Reason ?? "IP bloqueada";
+
+                await context.Response.WriteAsJsonAsync(new
+                {
+                    error = "Acceso denegado",
+                    message = "Tu dirección IP ha sido bloqueada",
+                    reason = blockInfo?.Reason,
+                    blockedDate = blockInfo?.BlockedDate,
+                    expiryDate = blockInfo?.ExpiryDate
+                });
+
+                return; // Stop pipeline execution
+            }
+        }
+
+        await _next(context); // Continue to next middleware
+    }
+}
+```
+
+### Response for Blocked IP
+
+**Status Code:** `403 Forbidden`
+
+**Headers:**
+```
+X-Block-Reason: Too many failed login attempts
+```
+
+**Body:**
+```json
+{
+  "error": "Acceso denegado",
+  "message": "Tu dirección IP ha sido bloqueada",
+  "reason": "Too many failed login attempts",
+  "blockedDate": "2024-01-10T15:30:00Z",
+  "expiryDate": "2024-01-11T15:30:00Z"
+}
+```
+
+### Registering the Middleware
+
+Add to `Program.cs` before routing:
+
+```csharp
+app.UseMiddleware<IpBlockingMiddleware>();
+app.UseRouting();
+```
+
+## IpBlackListService
+
+Service for managing IP blocks.
+
+**Location:** `src/Infrastructure/Services/IpBlackListService.cs:8`
+
+### Check if IP is Blocked
+
+```csharp
+public async Task<bool> IsIpBlockedAsync(string ipAddress)
+{
+    return await _context.IpBlackLists
+        .AnyAsync(ib => ib.IpAddress == ipAddress && 
+                       (ib.ExpiryDate == null || ib.ExpiryDate > DateTime.UtcNow));
+}
+```
+
+**Usage:**
+
+```csharp
+if (await _ipBlackListService.IsIpBlockedAsync("192.168.1.100"))
+{
+    // Deny access
+}
+```
+
+### Block an IP Address
+
+```csharp
+public async Task<IpBlackList> BlockIpAsync(
+    string ipAddress, 
+    string reason, 
+    BlackListReason blackListReason, 
+    string? blockedBy, 
+    DateTime? expiryDate = null, 
+    string? notes = null)
+```
+
+**Example - Permanent block:**
+
+```csharp
+var block = await _ipBlackListService.BlockIpAsync(
+    ipAddress: "192.168.1.100",
+    reason: "Malicious activity detected",
+    blackListReason: BlackListReason.SuspiciousActivity,
+    blockedBy: "admin-user-123",
+    expiryDate: null, // Permanent block
+    notes: "Multiple SQL injection attempts detected"
+);
+```
+
+**Example - Temporary block (24 hours):**
+
+```csharp
+var block = await _ipBlackListService.BlockIpAsync(
+    ipAddress: "192.168.1.100",
+    reason: "Too many failed login attempts",
+    blackListReason: BlackListReason.TooManyAttempts,
+    blockedBy: "system",
+    expiryDate: DateTime.UtcNow.AddHours(24),
+    notes: "Automatic block after 5 consecutive failures"
+);
+```
+
+**Automatic update:** If IP is already blocked, it removes the old block and creates a new one with updated information.
+
+### Unblock an IP Address
+
+```csharp
+public async Task<bool> UnblockIpAsync(string ipAddress, string unblockedBy)
+```
+
+**Example:**
+
+```csharp
+var success = await _ipBlackListService.UnblockIpAsync(
+    ipAddress: "192.168.1.100",
+    unblockedBy: "admin-user-123"
+);
+
+if (success)
+{
+    _logger.LogInformation("IP {IpAddress} has been unblocked", ipAddress);
+}
+```
+
+### Get Blocked IPs
+
+```csharp
+public async Task<IEnumerable<IpBlackList>> GetBlockedIpsAsync(
+    bool activeOnly = true)
+```
+
+**Example:**
+
+```csharp
+// Get only active blocks
+var activeBlocks = await _ipBlackListService.GetBlockedIpsAsync(activeOnly: true);
+
+// Get all blocks (including expired)
+var allBlocks = await _ipBlackListService.GetBlockedIpsAsync(activeOnly: false);
+
+foreach (var block in activeBlocks)
+{
+    Console.WriteLine($"IP: {block.IpAddress}, Reason: {block.Reason}");
+}
+```
+
+### Get Block Information
+
+```csharp
+public async Task<IpBlackList?> GetBlockInfoAsync(string ipAddress)
+```
+
+**Example:**
+
+```csharp
+var blockInfo = await _ipBlackListService.GetBlockInfoAsync("192.168.1.100");
+
+if (blockInfo != null)
+{
+    Console.WriteLine($"Blocked since: {blockInfo.BlockedDate}");
+    Console.WriteLine($"Reason: {blockInfo.Reason}");
+    Console.WriteLine($"Expires: {blockInfo.ExpiryDate?.ToString() ?? "Never"}");
+}
+```
+
+### Cleanup Expired Blocks
+
+```csharp
+public async Task<int> CleanupExpiredBlocksAsync()
+```
+
+Removes blocks that expired more than 30 days ago.
+
+**Example:**
+
+```csharp
+int deletedCount = await _ipBlackListService.CleanupExpiredBlocksAsync();
+_logger.LogInformation("Cleaned up {Count} expired IP blocks", deletedCount);
+```
+
+## API Endpoints
+
+**Location:** `src/Web/Endpoints/Security.cs:12`
+
+**Authorization:** All security endpoints require `CanPurge` permission.
+
+### Get Blocked IPs
+
+```http
+GET /api/security/blocked-ips?activeOnly=true
+Authorization: Bearer {admin-token}
+```
+
+**Response:**
+
+```json
+[
+  {
+    "id": "guid-1",
+    "ipAddress": "192.168.1.100",
+    "reason": "Too many failed login attempts",
+    "blackListReason": "TooManyAttempts",
+    "blockedDate": "2024-01-10T15:30:00Z",
+    "expiryDate": "2024-01-11T15:30:00Z",
+    "blockedBy": "system",
+    "notes": "Automatic block after 5 failures",
+    "isActive": true
+  }
+]
+```
+
+### Block IP Address
+
+```http
+POST /api/security/block-ip
+Authorization: Bearer {admin-token}
+Content-Type: application/json
+
+{
+  "ipAddress": "192.168.1.100",
+  "reason": "Suspicious activity",
+  "blackListReason": "SuspiciousActivity",
+  "expiryDate": "2024-01-15T00:00:00Z",
+  "notes": "Multiple suspicious requests detected"
+}
+```
+
+**Response:**
+
+```json
+{
+  "succeeded": true,
+  "message": "IP address blocked successfully"
+}
+```
+
+### Unblock IP Address
+
+```http
+POST /api/security/unblock-ip
+Authorization: Bearer {admin-token}
+Content-Type: application/json
+
+{
+  "ipAddress": "192.168.1.100"
+}
+```
+
+**Response:**
+
+```json
+{
+  "succeeded": true,
+  "message": "IP address unblocked successfully"
+}
+```
+
+## Integration with Login Attempts
+
+IP blocking can be automatically triggered by failed login attempts:
+
+### LoginAttempt Entity
+
+**Location:** `src/Domain/Entities/LoginAttempt.cs:3`
+
+```csharp
+public class LoginAttempt : BaseEntity
+{
+    public string Email { get; private set; }
+    public string IpAddress { get; private set; }
+    public string? UserAgent { get; private set; }
+    public DateTime AttemptDate { get; private set; }
+    public bool WasSuccessful { get; private set; }
+    public string? FailureReason { get; private set; }
+    public LoginFailureReason? FailureReasonType { get; private set; }
+}
+```
+
+### Automatic IP Blocking
+
+```csharp
+// After failed login attempt
+var failedAttempts = await _context.LoginAttempts
+    .Where(la => la.IpAddress == ipAddress && 
+                 !la.WasSuccessful &&
+                 la.AttemptDate > DateTime.UtcNow.AddHours(-1))
+    .CountAsync();
+
+if (failedAttempts >= 5)
+{
+    await _ipBlackListService.BlockIpAsync(
+        ipAddress: ipAddress,
+        reason: "Too many failed login attempts",
+        blackListReason: BlackListReason.TooManyAttempts,
+        blockedBy: "system",
+        expiryDate: DateTime.UtcNow.AddHours(24)
+    );
+}
+```
+
+## Best Practices
+
+### Blocking Strategy
+
+**Temporary blocks (24-48 hours):**
+- Failed login attempts
+- Rate limit violations
+- Minor suspicious activity
+
+**Permanent blocks:**
+- Known malicious IPs
+- Severe abuse
+- Manual administrative action
+
+### Whitelist Important IPs
+
+Add logic to exempt trusted IPs:
+
+```csharp
+private static readonly HashSet<string> WhitelistedIPs = new()
+{
+    "127.0.0.1",
+    "::1",
+    // Add company IPs, monitoring services, etc.
+};
+
+if (WhitelistedIPs.Contains(ipAddress))
+{
+    return false; // Never block whitelisted IPs
+}
+```
+
+### IPv6 Support
+
+The system supports both IPv4 and IPv6 addresses:
+
+```csharp
+var ipAddress = context.Connection.RemoteIpAddress?.ToString();
+// Returns: "192.168.1.100" (IPv4) or "2001:0db8:85a3::8a2e:0370:7334" (IPv6)
+```
+
+### Monitoring and Alerts
+
+Log all blocking events:
+
+```csharp
+_logger.LogWarning(
+    "IP blocked: {IpAddress} - Reason: {Reason} - BlockedBy: {BlockedBy}",
+    ipAddress,
+    reason,
+    blockedBy
+);
+```
+
+Send alerts for suspicious patterns:
+
+```csharp
+if (blackListReason == BlackListReason.SuspiciousActivity)
+{
+    await _notificationService.SendSecurityAlertAsync(
+        $"IP {ipAddress} blocked for suspicious activity"
+    );
+}
+```
+
+### Cleanup Strategy
+
+Run periodic cleanup:
+
+```csharp
+// In a background service or scheduled job
+public async Task ExecuteAsync(CancellationToken stoppingToken)
+{
+    while (!stoppingToken.IsCancellationRequested)
+    {
+        await _ipBlackListService.CleanupExpiredBlocksAsync();
+        await Task.Delay(TimeSpan.FromDays(1), stoppingToken);
+    }
+}
+```
+
+## Implementation Details
+
+**File locations:**
+- IpBlackList Entity: `src/Domain/Entities/IpBlackList.cs:3`
+- IpBlackListService: `src/Infrastructure/Services/IpBlackListService.cs:8`
+- IpBlockingMiddleware: `src/Web/Middleware/IpBlockingMiddleware.cs:5`
+- Security Endpoints: `src/Web/Endpoints/Security.cs:12`
+- BlackListReason Enum: `src/Domain/Enums/AuthEnums.cs:69`
+- LoginAttempt Entity: `src/Domain/Entities/LoginAttempt.cs:3`
+
+## See Also
+
+- [JWT Authentication](/security/jwt-authentication)
+- [Two-Factor Authentication](/security/two-factor-auth)
+- [Audit Logs](/security/audit-logs)

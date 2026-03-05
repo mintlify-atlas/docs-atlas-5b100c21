@@ -1,0 +1,839 @@
+---
+title: Installation Guide
+description: Comprehensive installation and configuration guide for SAPFIAI
+---
+
+This guide provides detailed instructions for installing, configuring, and deploying SAPFIAI in various environments.
+
+## System Requirements
+
+### Minimum Requirements
+
+<CardGroup cols={2}>
+  <Card title=".NET 8.0 SDK" icon="code">
+    Required for building and running the application
+  </Card>
+  
+  <Card title="Database Server" icon="database">
+    SQL Server 2019+, LocalDB, Express, or SQLite
+  </Card>
+  
+  <Card title="IDE" icon="laptop-code">
+    Visual Studio 2022+ or VS Code with C# extension
+  </Card>
+  
+  <Card title="Git" icon="git-alt">
+    Version control for cloning the repository
+  </Card>
+</CardGroup>
+
+### Recommended Specifications
+
+- **OS**: Windows 10/11, macOS 12+, or Linux (Ubuntu 20.04+)
+- **RAM**: 8 GB minimum, 16 GB recommended
+- **Storage**: 2 GB for dependencies and build artifacts
+- **CPU**: 64-bit processor, 2+ cores recommended
+
+## Prerequisites Installation
+
+<Steps>
+  <Step title="Install .NET 8.0 SDK">
+    Download and install the .NET 8.0 SDK from the official website:
+    
+    [Download .NET 8.0 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
+    
+    Verify the installation:
+    
+    ```bash
+    dotnet --version
+    ```
+    
+    Expected output: `8.0.x`
+    
+    <Accordion title="Installing on Different Platforms">
+      <CodeGroup>
+        ```bash Windows
+        # Using winget (Windows Package Manager)
+        winget install Microsoft.DotNet.SDK.8
+        
+        # Or download and run the installer from microsoft.com
+        ```
+        
+        ```bash macOS
+        # Using Homebrew
+        brew install dotnet@8
+        
+        # Or download the PKG installer from microsoft.com
+        ```
+        
+        ```bash Linux (Ubuntu/Debian)
+        wget https://dot.net/v1/dotnet-install.sh
+        chmod +x dotnet-install.sh
+        ./dotnet-install.sh --channel 8.0
+        
+        # Add to PATH
+        export PATH="$HOME/.dotnet:$PATH"
+        ```
+      </CodeGroup>
+    </Accordion>
+  </Step>
+  
+  <Step title="Install Database Server">
+    Choose one of the following database options:
+    
+    <Accordion title="SQL Server LocalDB (Recommended for Development)">
+      LocalDB comes with Visual Studio or can be installed separately:
+      
+      **Windows:**
+      ```bash
+      # Download SQL Server Express with LocalDB
+      # https://www.microsoft.com/en-us/sql-server/sql-server-downloads
+      
+      # Verify installation
+      sqllocaldb info
+      ```
+      
+      **Start LocalDB:**
+      ```bash
+      sqllocaldb start MSSQLLocalDB
+      sqllocaldb info MSSQLLocalDB
+      ```
+    </Accordion>
+    
+    <Accordion title="SQL Server Express (Windows)">
+      Download from Microsoft:
+      [SQL Server Express](https://www.microsoft.com/en-us/sql-server/sql-server-downloads)
+      
+      After installation, verify the service is running:
+      ```bash
+      # Check SQL Server service status
+      sc query MSSQL$SQLEXPRESS
+      ```
+    </Accordion>
+    
+    <Accordion title="SQL Server on Linux/macOS (Docker)">
+      Use Docker to run SQL Server on non-Windows platforms:
+      
+      ```bash
+      # Pull SQL Server 2022 image
+      docker pull mcr.microsoft.com/mssql/server:2022-latest
+      
+      # Run SQL Server container
+      docker run -e "ACCEPT_EULA=Y" -e "SA_PASSWORD=YourStrong@Password" \
+        -p 1433:1433 --name sqlserver \
+        -d mcr.microsoft.com/mssql/server:2022-latest
+      
+      # Verify it's running
+      docker ps
+      ```
+      
+      Connection string:
+      ```json
+      "DefaultConnection": "Server=localhost,1433;Database=SAPFIAIDb;User Id=sa;Password=YourStrong@Password;TrustServerCertificate=true"
+      ```
+    </Accordion>
+    
+    <Accordion title="SQLite (Lightweight Alternative)">
+      No installation required! SQLite is embedded and works on all platforms.
+      
+      Just use a SQLite connection string:
+      ```json
+      {
+        "ConnectionStrings": {
+          "DefaultConnection": "Data Source=sapfiai.db"
+        }
+      }
+      ```
+      
+      <Note>
+        SQLite is great for development and testing but not recommended for production with high concurrency.
+      </Note>
+    </Accordion>
+  </Step>
+  
+  <Step title="Install Development Tools">
+    Choose your preferred development environment:
+    
+    <Accordion title="Visual Studio 2022 (Recommended for Windows)">
+      Download from: [Visual Studio Downloads](https://visualstudio.microsoft.com/downloads/)
+      
+      **Required Workloads:**
+      - ASP.NET and web development
+      - .NET desktop development
+      - Data storage and processing (for SQL Server tools)
+      
+      **Recommended Extensions:**
+      - ReSharper or CodeMaid
+      - NUnit Test Adapter
+      - REST Client or Postman extension
+    </Accordion>
+    
+    <Accordion title="Visual Studio Code (Cross-Platform)">
+      Download from: [VS Code Downloads](https://code.visualstudio.com/download)
+      
+      **Required Extensions:**
+      ```bash
+      # Install via command line
+      code --install-extension ms-dotnettools.csharp
+      code --install-extension ms-dotnettools.csdevkit
+      code --install-extension jchannon.csharpextensions
+      code --install-extension formulahendry.dotnet-test-explorer
+      ```
+      
+      Or search in VS Code Extensions:
+      - C# (Microsoft)
+      - C# Dev Kit (Microsoft)
+      - NuGet Package Manager
+      - REST Client
+    </Accordion>
+    
+    <Accordion title="JetBrains Rider (Cross-Platform)">
+      Download from: [JetBrains Rider](https://www.jetbrains.com/rider/)
+      
+      Rider has built-in support for .NET, EF Core, and all required features.
+    </Accordion>
+  </Step>
+  
+  <Step title="Install Entity Framework Core Tools">
+    Install the EF Core command-line tools globally:
+    
+    ```bash
+    dotnet tool install --global dotnet-ef
+    ```
+    
+    Verify installation:
+    ```bash
+    dotnet ef --version
+    ```
+    
+    <Tip>
+      If you already have `dotnet-ef` installed, update it:
+      ```bash
+      dotnet tool update --global dotnet-ef
+      ```
+    </Tip>
+  </Step>
+  
+  <Step title="Install Git (Optional but Recommended)">
+    Download from: [Git Downloads](https://git-scm.com/downloads)
+    
+    Verify installation:
+    ```bash
+    git --version
+    ```
+  </Step>
+</Steps>
+
+## Project Setup
+
+<Steps>
+  <Step title="Clone or Download the Project">
+    **Option 1: Clone with Git**
+    ```bash
+    git clone <repository-url>
+    cd SAPFIAI
+    ```
+    
+    **Option 2: Download ZIP**
+    - Download the project ZIP file
+    - Extract to your desired location
+    - Open terminal in the extracted folder
+  </Step>
+  
+  <Step title="Restore NuGet Packages">
+    Restore all project dependencies:
+    
+    ```bash
+    dotnet restore
+    ```
+    
+    This downloads:
+    - ASP.NET Core 8.0 packages
+    - Entity Framework Core 8.0
+    - MediatR, AutoMapper, FluentValidation
+    - Testing frameworks (NUnit, Moq, FluentAssertions)
+    - All other dependencies
+    
+    <Info>
+      First restore might take 2-5 minutes depending on your internet connection.
+    </Info>
+  </Step>
+  
+  <Step title="Build the Solution">
+    Verify the project builds successfully:
+    
+    ```bash
+    dotnet build
+    ```
+    
+    Expected output:
+    ```
+    Build succeeded.
+        0 Warning(s)
+        0 Error(s)
+    ```
+    
+    <Accordion title="Common Build Issues">
+      **Issue: SDK Version Mismatch**
+      ```
+      error NETSDK1045: The current .NET SDK does not support targeting .NET 8.0
+      ```
+      Solution: Install .NET 8.0 SDK
+      
+      **Issue: Package Restore Failed**
+      ```
+      error NU1101: Unable to find package
+      ```
+      Solution:
+      ```bash
+      dotnet nuget locals all --clear
+      dotnet restore --force
+      ```
+    </Accordion>
+  </Step>
+</Steps>
+
+## Configuration
+
+<Steps>
+  <Step title="Configure Database Connection">
+    Edit `src/Web/appsettings.json` and update the connection string:
+    
+    <CodeGroup>
+      ```json SQL Server LocalDB (Default)
+      {
+        "ConnectionStrings": {
+          "DefaultConnection": "Server=(localdb)\\mssqllocaldb;Database=SAPFIAIDb;Trusted_Connection=true;MultipleActiveResultSets=true"
+        }
+      }
+      ```
+      
+      ```json SQL Server Express
+      {
+        "ConnectionStrings": {
+          "DefaultConnection": "Server=localhost\\SQLEXPRESS;Database=SAPFIAIDb;Trusted_Connection=true;MultipleActiveResultSets=true"
+        }
+      }
+      ```
+      
+      ```json SQL Server (Docker/Remote)
+      {
+        "ConnectionStrings": {
+          "DefaultConnection": "Server=localhost,1433;Database=SAPFIAIDb;User Id=sa;Password=YourPassword;TrustServerCertificate=true"
+        }
+      }
+      ```
+      
+      ```json SQLite
+      {
+        "ConnectionStrings": {
+          "DefaultConnection": "Data Source=sapfiai.db"
+        }
+      }
+      ```
+    </CodeGroup>
+    
+    <Warning>
+      Never commit actual passwords to version control! Use environment variables or user secrets for production.
+    </Warning>
+  </Step>
+  
+  <Step title="Configure JWT Authentication">
+    Update JWT settings in `src/Web/appsettings.json`:
+    
+    ```json
+    {
+      "Jwt": {
+        "Key": "YOUR-SUPER-SECRET-KEY-MINIMUM-32-CHARACTERS-LONG-CHANGE-THIS",
+        "Issuer": "SAPFIAI",
+        "Audience": "SAPFIAI-Users",
+        "ExpireMinutes": "60",
+        "RefreshTokenExpirationDays": "7"
+      }
+    }
+    ```
+    
+    <Note>
+      - **Key**: Must be at least 32 characters. Use a strong random string.
+      - **ExpireMinutes**: Access token lifetime (recommended: 15-60 minutes)
+      - **RefreshTokenExpirationDays**: Refresh token lifetime (recommended: 7-30 days)
+    </Note>
+    
+    **Generate a secure key:**
+    ```bash
+    # Using PowerShell
+    [Convert]::ToBase64String((1..64 | ForEach-Object { Get-Random -Maximum 256 }))
+    
+    # Using OpenSSL
+    openssl rand -base64 64
+    ```
+  </Step>
+  
+  <Step title="Configure Security Settings (Optional)">
+    Adjust security thresholds in `src/Web/appsettings.json`:
+    
+    ```json
+    {
+      "Security": {
+        "RefreshToken": {
+          "ExpirationDays": 7,
+          "MaxActiveTokensPerUser": 5
+        },
+        "RateLimiting": {
+          "MaxAttemptsPerIp": 5,
+          "WindowMinutes": 15,
+          "IpBlockDurationMinutes": 60
+        },
+        "AccountLock": {
+          "MaxFailedAttempts": 5,
+          "LockoutMinutes": 15,
+          "ResetFailedAttemptsAfterMinutes": 60
+        },
+        "BlackList": {
+          "EnableAutoBlock": true,
+          "AutoBlockAfterAttempts": 10,
+          "AutoBlockDurationHours": 24
+        }
+      }
+    }
+    ```
+    
+    <Accordion title="Security Settings Explained">
+      **Refresh Token:**
+      - `ExpirationDays`: How long refresh tokens are valid
+      - `MaxActiveTokensPerUser`: Limit concurrent sessions per user
+      
+      **Rate Limiting:**
+      - `MaxAttemptsPerIp`: Login attempts allowed per IP
+      - `WindowMinutes`: Time window for counting attempts
+      - `IpBlockDurationMinutes`: Temporary block duration
+      
+      **Account Lock:**
+      - `MaxFailedAttempts`: Failed logins before account lockout
+      - `LockoutMinutes`: Account lockout duration
+      - `ResetFailedAttemptsAfterMinutes`: When to reset failure counter
+      
+      **IP Blacklist:**
+      - `EnableAutoBlock`: Automatically block abusive IPs
+      - `AutoBlockAfterAttempts`: Attempts before auto-block
+      - `AutoBlockDurationHours`: Auto-block duration
+    </Accordion>
+  </Step>
+  
+  <Step title="Use User Secrets for Development (Recommended)">
+    Instead of storing sensitive data in `appsettings.json`, use User Secrets:
+    
+    ```bash
+    cd src/Web
+    
+    # Initialize user secrets
+    dotnet user-secrets init
+    
+    # Set connection string
+    dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Server=(localdb)\\mssqllocaldb;Database=SAPFIAIDb;Trusted_Connection=true;"
+    
+    # Set JWT key
+    dotnet user-secrets set "Jwt:Key" "YOUR-SUPER-SECRET-KEY-HERE"
+    
+    # List all secrets
+    dotnet user-secrets list
+    ```
+    
+    <Info>
+      User secrets are stored outside the project directory and are never committed to version control.
+    </Info>
+  </Step>
+  
+  <Step title="Configure Email Service (Optional)">
+    If you want to enable email features (2FA, password reset), configure an email provider.
+    
+    SAPFIAI includes Brevo (formerly SendinBlue) integration:
+    
+    ```json
+    {
+      "Brevo": {
+        "ApiKey": "xkeysib-your-api-key-here",
+        "SenderEmail": "noreply@yourdomain.com",
+        "SenderName": "SAPFIAI"
+      }
+    }
+    ```
+    
+    **Using User Secrets:**
+    ```bash
+    dotnet user-secrets set "Brevo:ApiKey" "xkeysib-your-key"
+    dotnet user-secrets set "Brevo:SenderEmail" "noreply@yourdomain.com"
+    ```
+    
+    <Accordion title="Email Providers">
+      SAPFIAI works with any SMTP provider. Popular options:
+      - **Brevo** (included): Free tier available, easy integration
+      - **SendGrid**: 100 emails/day free
+      - **Mailgun**: 5,000 emails/month free
+      - **AWS SES**: Pay-as-you-go pricing
+      - **Custom SMTP**: Use your own mail server
+    </Accordion>
+  </Step>
+</Steps>
+
+## Database Migration
+
+<Steps>
+  <Step title="Apply Database Migrations">
+    Create the database and apply all migrations:
+    
+    ```bash
+    dotnet ef database update --project src/Infrastructure --startup-project src/Web
+    ```
+    
+    This will:
+    1. Create the `SAPFIAIDb` database
+    2. Create all tables (AspNetUsers, RefreshTokens, Permissions, etc.)
+    3. Apply initial data seeding
+    
+    <Accordion title="Migration Output Example">
+      ```
+      Build started...
+      Build succeeded.
+      info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+            Executed DbCommand (85ms) [Parameters=[], CommandType='Text']
+            CREATE DATABASE [SAPFIAIDb];
+      info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+            Executed DbCommand (12ms) [Parameters=[], CommandType='Text']
+            CREATE TABLE [AspNetUsers] (
+                [Id] nvarchar(450) NOT NULL,
+                [UserName] nvarchar(256) NULL,
+                [Email] nvarchar(256) NULL,
+                ...
+            );
+      Done.
+      ```
+    </Accordion>
+  </Step>
+  
+  <Step title="Verify Database Creation">
+    Connect to your database and verify tables were created:
+    
+    **Using SQL Server Management Studio (SSMS):**
+    - Server: `(localdb)\mssqllocaldb`
+    - Database: `SAPFIAIDb`
+    
+    **Using command line:**
+    ```bash
+    sqlcmd -S "(localdb)\\mssqllocaldb" -d SAPFIAIDb -Q "SELECT name FROM sys.tables"
+    ```
+    
+    Expected tables:
+    - AspNetUsers, AspNetRoles, AspNetUserRoles
+    - RefreshTokens
+    - LoginAttempts
+    - IpBlackLists
+    - AuditLogs
+    - Permissions, RolePermissions
+  </Step>
+  
+  <Step title="Seed Initial Data (Optional)">
+    The application automatically seeds:
+    - Default administrator role
+    - Basic permissions
+    - System configuration
+    
+    To create an admin user, run the application and register via API, then manually assign the admin role in the database.
+    
+    <Accordion title="Manual Admin User Creation">
+      After registering a user via the API:
+      
+      ```sql
+      -- Get user ID
+      SELECT Id, UserName, Email FROM AspNetUsers WHERE Email = 'admin@example.com';
+      
+      -- Get admin role ID
+      SELECT Id, Name FROM AspNetRoles WHERE Name = 'Administrator';
+      
+      -- Assign admin role to user
+      INSERT INTO AspNetUserRoles (UserId, RoleId)
+      VALUES ('user-id-here', 'role-id-here');
+      ```
+    </Accordion>
+  </Step>
+</Steps>
+
+## Running the Application
+
+<Steps>
+  <Step title="Start the API Server">
+    Run the application:
+    
+    ```bash
+    dotnet run --project src/Web
+    ```
+    
+    Or with hot reload:
+    ```bash
+    dotnet watch run --project src/Web
+    ```
+    
+    **From Visual Studio:**
+    - Open `SAPFIAI.sln`
+    - Press F5 or click the green play button
+    - Select "Web" profile if prompted
+  </Step>
+  
+  <Step title="Verify the Application is Running">
+    Check the console output for the URLs:
+    
+    ```
+    info: Microsoft.Hosting.Lifetime[14]
+          Now listening on: https://localhost:5001
+    info: Microsoft.Hosting.Lifetime[14]
+          Now listening on: http://localhost:5000
+    ```
+    
+    Navigate to:
+    - **Swagger UI**: https://localhost:5001/api
+    - **Health Check**: https://localhost:5001/health
+  </Step>
+  
+  <Step title="Test Basic Functionality">
+    Make a test request:
+    
+    ```bash
+    # Health check
+    curl https://localhost:5001/health
+    
+    # Expected: "Healthy"
+    ```
+    
+    Or open Swagger UI and try the `/api/Authentication/register` endpoint.
+  </Step>
+</Steps>
+
+## Production Deployment
+
+<Steps>
+  <Step title="Update Production Configuration">
+    Create `src/Web/appsettings.Production.json`:
+    
+    ```json
+    {
+      "ConnectionStrings": {
+        "DefaultConnection": "Server=production-server;Database=SAPFIAIDb;User Id=app_user;Password=secure_password;Encrypt=true;"
+      },
+      "Jwt": {
+        "Key": "USE-ENVIRONMENT-VARIABLE-OR-KEY-VAULT",
+        "ExpireMinutes": "15"
+      },
+      "Logging": {
+        "LogLevel": {
+          "Default": "Warning",
+          "Microsoft.AspNetCore": "Warning"
+        }
+      }
+    }
+    ```
+    
+    <Warning>
+      Never store production secrets in configuration files! Use:
+      - Azure Key Vault
+      - AWS Secrets Manager
+      - Environment variables
+      - Container secrets
+    </Warning>
+  </Step>
+  
+  <Step title="Publish the Application">
+    Create a production build:
+    
+    ```bash
+    dotnet publish src/Web/Web.csproj -c Release -o ./publish
+    ```
+    
+    This creates a deployment-ready package in the `./publish` folder.
+  </Step>
+  
+  <Step title="Apply Production Migrations">
+    **Option 1: Generate SQL Script**
+    ```bash
+    dotnet ef migrations script --project src/Infrastructure --startup-project src/Web --output migration.sql
+    ```
+    Execute the script on your production database.
+    
+    **Option 2: Run Migrations on Startup**
+    Enable in `Program.cs` (not recommended for production):
+    ```csharp
+    if (app.Environment.IsProduction())
+    {
+        await app.InitialiseDatabaseAsync();
+    }
+    ```
+  </Step>
+  
+  <Step title="Deploy to Hosting Platform">
+    <Accordion title="Deploy to Azure App Service">
+      ```bash
+      # Install Azure CLI
+      az login
+      
+      # Create resource group
+      az group create --name sapfiai-rg --location eastus
+      
+      # Create App Service plan
+      az appservice plan create --name sapfiai-plan --resource-group sapfiai-rg --sku B1 --is-linux
+      
+      # Create web app
+      az webapp create --name sapfiai-api --resource-group sapfiai-rg --plan sapfiai-plan --runtime "DOTNETCORE:8.0"
+      
+      # Deploy
+      az webapp up --name sapfiai-api --resource-group sapfiai-rg --src-path ./publish
+      ```
+    </Accordion>
+    
+    <Accordion title="Deploy to Docker">
+      Create `Dockerfile` in project root:
+      
+      ```dockerfile
+      FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
+      WORKDIR /app
+      EXPOSE 80
+      EXPOSE 443
+      
+      FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+      WORKDIR /src
+      COPY ["src/Web/Web.csproj", "src/Web/"]
+      COPY ["src/Application/Application.csproj", "src/Application/"]
+      COPY ["src/Infrastructure/Infrastructure.csproj", "src/Infrastructure/"]
+      COPY ["src/Domain/Domain.csproj", "src/Domain/"]
+      RUN dotnet restore "src/Web/Web.csproj"
+      COPY . .
+      WORKDIR "/src/src/Web"
+      RUN dotnet build "Web.csproj" -c Release -o /app/build
+      
+      FROM build AS publish
+      RUN dotnet publish "Web.csproj" -c Release -o /app/publish
+      
+      FROM base AS final
+      WORKDIR /app
+      COPY --from=publish /app/publish .
+      ENTRYPOINT ["dotnet", "Web.dll"]
+      ```
+      
+      Build and run:
+      ```bash
+      docker build -t sapfiai-api .
+      docker run -p 8080:80 sapfiai-api
+      ```
+    </Accordion>
+    
+    <Accordion title="Deploy to IIS (Windows Server)">
+      1. Install [.NET 8.0 Hosting Bundle](https://dotnet.microsoft.com/download/dotnet/8.0)
+      2. Create IIS Application Pool (.NET CLR Version: No Managed Code)
+      3. Create IIS Website pointing to `./publish` folder
+      4. Configure `web.config` (auto-generated by publish)
+      5. Set Application Pool identity to access SQL Server
+      6. Restart IIS
+    </Accordion>
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+<Accordion title="Database Connection Issues">
+  **Symptoms:** Can't connect to database
+  
+  **Solutions:**
+  1. Verify SQL Server is running:
+     ```bash
+     sqllocaldb info
+     sqllocaldb start MSSQLLocalDB
+     ```
+  
+  2. Test connection string:
+     ```bash
+     sqlcmd -S "(localdb)\\mssqllocaldb" -Q "SELECT @@VERSION"
+     ```
+  
+  3. Check firewall rules (for remote SQL Server)
+  
+  4. Enable TCP/IP in SQL Server Configuration Manager
+</Accordion>
+
+<Accordion title="Migration Failures">
+  **Symptoms:** `dotnet ef database update` fails
+  
+  **Solutions:**
+  1. Verify EF Core tools are installed:
+     ```bash
+     dotnet ef --version
+     ```
+  
+  2. Drop and recreate database:
+     ```bash
+     dotnet ef database drop --project src/Infrastructure --startup-project src/Web
+     dotnet ef database update --project src/Infrastructure --startup-project src/Web
+     ```
+  
+  3. Check for migration conflicts:
+     ```bash
+     dotnet ef migrations list --project src/Infrastructure --startup-project src/Web
+     ```
+</Accordion>
+
+<Accordion title="JWT Token Issues">
+  **Symptoms:** "Unauthorized" errors or invalid tokens
+  
+  **Solutions:**
+  1. Verify JWT key is at least 32 characters
+  2. Check token expiration settings
+  3. Ensure clock synchronization (server time)
+  4. Verify `Issuer` and `Audience` match in settings
+</Accordion>
+
+<Accordion title="SSL Certificate Errors in Development">
+  **Symptoms:** Browser shows certificate warnings
+  
+  **Solution:**
+  ```bash
+  dotnet dev-certs https --clean
+  dotnet dev-certs https --trust
+  ```
+  
+  Restart your browser after trusting the certificate.
+</Accordion>
+
+<Accordion title="Port Already in Use">
+  **Symptoms:** "Address already in use" error
+  
+  **Solutions:**
+  1. Change ports in `launchSettings.json`
+  2. Find and kill the process using the port:
+     ```bash
+     # Windows
+     netstat -ano | findstr :5001
+     taskkill /PID <process-id> /F
+     
+     # Linux/macOS
+     lsof -ti:5001 | xargs kill -9
+     ```
+</Accordion>
+
+## Next Steps
+
+Your SAPFIAI installation is complete! Explore these resources:
+
+<CardGroup cols={2}>
+  <Card title="Quickstart Guide" icon="rocket" href="/quickstart">
+    Get your API running quickly
+  </Card>
+  
+  <Card title="Architecture Guide" icon="sitemap" href="/architecture/overview">
+    Understand the project structure
+  </Card>
+  
+  <Card title="API Reference" icon="book" href="/api/authentication/login">
+    Explore available endpoints
+  </Card>
+  
+  <Card title="Creating Use Cases" icon="code" href="/guides/creating-use-cases">
+    Learn how to add new features
+  </Card>
+</CardGroup>

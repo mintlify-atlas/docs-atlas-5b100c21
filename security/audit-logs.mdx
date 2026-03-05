@@ -1,0 +1,625 @@
+---
+title: Audit Logs
+description: Comprehensive audit logging system for tracking security events and user actions in SAPFIAI
+---
+
+## Overview
+
+SAPFIAI implements a comprehensive audit logging system that tracks all security-related events and user actions. This provides accountability, security monitoring, and compliance support.
+
+## AuditLog Entity
+
+The domain entity stores audit information.
+
+**Location:** `src/Domain/Entities/AuditLog.cs:6`
+
+```csharp
+public class AuditLog : BaseEntity
+{
+    public string UserId { get; private set; }
+    public string Action { get; private set; }
+    public string? IpAddress { get; private set; }
+    public string? UserAgent { get; private set; }
+    public DateTime Timestamp { get; private set; }
+    public string? Details { get; private set; }
+    public string Status { get; private set; }
+    public string? ErrorMessage { get; private set; }
+    public string? ResourceId { get; private set; }
+    public string? ResourceType { get; private set; }
+}
+```
+
+### Creating Audit Logs
+
+```csharp
+var auditLog = AuditLog.Create(
+    userId: "user-123",
+    action: "LOGIN",
+    ipAddress: "192.168.1.100",
+    userAgent: "Mozilla/5.0...",
+    details: "User logged in successfully",
+    status: "SUCCESS",
+    errorMessage: null,
+    resourceId: null,
+    resourceType: null
+);
+```
+
+### Status Values
+
+- `SUCCESS` - Operation completed successfully
+- `FAILED` - Operation failed
+- `WARNING` - Operation completed with warnings
+- `ERROR` - System error occurred
+
+## AuditLogService
+
+Service for creating and querying audit logs.
+
+**Location:** `src/Infrastructure/Services/AuditLogService.cs:13`
+
+### Dependencies
+
+```csharp
+public class AuditLogService : IAuditLogService
+{
+    private readonly ApplicationDbContext _dbContext;
+    private readonly ILogger<AuditLogService> _logger;
+}
+```
+
+### Log Generic Action
+
+```csharp
+public async Task LogActionAsync(
+    string userId,
+    string action,
+    string? ipAddress = null,
+    string? userAgent = null,
+    string? details = null,
+    string status = "SUCCESS",
+    string? errorMessage = null,
+    string? resourceId = null,
+    string? resourceType = null)
+```
+
+**Example:**
+
+```csharp
+await _auditLogService.LogActionAsync(
+    userId: currentUser.Id,
+    action: "USER_UPDATED",
+    ipAddress: httpContext.Connection.RemoteIpAddress?.ToString(),
+    userAgent: httpContext.Request.Headers.UserAgent.ToString(),
+    details: "Updated user profile information",
+    status: "SUCCESS",
+    resourceId: targetUserId,
+    resourceType: "User"
+);
+```
+
+### Log Login Events
+
+**Successful login:**
+
+```csharp
+public async Task LogLoginAsync(
+    string userId, 
+    string ipAddress, 
+    string? userAgent = null)
+{
+    await LogActionAsync(
+        userId,
+        "LOGIN",
+        ipAddress,
+        userAgent,
+        status: "SUCCESS"
+    );
+}
+```
+
+**Failed login:**
+
+```csharp
+public async Task LogFailedLoginAsync(
+    string userId, 
+    string ipAddress, 
+    string? userAgent = null, 
+    string? error = null)
+{
+    await LogActionAsync(
+        userId,
+        "FAILED_LOGIN",
+        ipAddress,
+        userAgent,
+        status: "FAILED",
+        errorMessage: error
+    );
+}
+```
+
+**Usage:**
+
+```csharp
+// After successful login
+await _auditLogService.LogLoginAsync(
+    userId: user.Id,
+    ipAddress: "192.168.1.100",
+    userAgent: "Mozilla/5.0..."
+);
+
+// After failed login
+await _auditLogService.LogFailedLoginAsync(
+    userId: email, // Use email if user not found
+    ipAddress: "192.168.1.100",
+    userAgent: "Mozilla/5.0...",
+    error: "Invalid credentials"
+);
+```
+
+## Querying Audit Logs
+
+### Get User Audit Logs
+
+```csharp
+public async Task<List<AuditLogDto>> GetUserAuditLogsAsync(
+    string userId, 
+    int skip = 0, 
+    int take = 50)
+```
+
+**Example:**
+
+```csharp
+// Get first 50 logs for user
+var userLogs = await _auditLogService.GetUserAuditLogsAsync(
+    userId: "user-123",
+    skip: 0,
+    take: 50
+);
+
+// Pagination - get next 50 logs
+var nextPage = await _auditLogService.GetUserAuditLogsAsync(
+    userId: "user-123",
+    skip: 50,
+    take: 50
+);
+```
+
+### Get All Audit Logs
+
+```csharp
+public async Task<List<AuditLogDto>> GetAllAuditLogsAsync(
+    int skip = 0, 
+    int take = 100)
+```
+
+**Example:**
+
+```csharp
+// Get recent 100 logs across all users
+var recentLogs = await _auditLogService.GetAllAuditLogsAsync(
+    skip: 0,
+    take: 100
+);
+```
+
+### AuditLogDto
+
+```csharp
+public class AuditLogDto
+{
+    public Guid Id { get; set; }
+    public string UserId { get; set; }
+    public string Action { get; set; }
+    public string? IpAddress { get; set; }
+    public string? UserAgent { get; set; }
+    public DateTime Timestamp { get; set; }
+    public string? Details { get; set; }
+    public string Status { get; set; }
+    public string? ErrorMessage { get; set; }
+    public string? ResourceId { get; set; }
+    public string? ResourceType { get; set; }
+}
+```
+
+## Audit Action Types
+
+Predefined action types in the system.
+
+**Location:** `src/Domain/Enums/AuthEnums.cs:6`
+
+### Authentication Actions
+
+```csharp
+public enum AuditActionType
+{
+    // Authentication
+    Login,
+    LoginFailed,
+    Logout,
+    Register,
+    PasswordChanged,
+    PasswordReset,
+    TwoFactorEnabled,
+    TwoFactorDisabled,
+    TwoFactorValidated,
+    TwoFactorFailed,
+    RefreshToken,
+    TokenRevoked,
+    
+    // Users
+    UserCreated,
+    UserUpdated,
+    UserDeleted,
+    UserActivated,
+    UserDeactivated,
+    
+    // Roles and Permissions
+    RoleCreated,
+    RoleUpdated,
+    RoleDeleted,
+    PermissionAssigned,
+    PermissionRevoked,
+    
+    // Other
+    Error,
+    SecurityAlert
+}
+```
+
+### Usage with Enum
+
+```csharp
+await _auditLogService.LogActionAsync(
+    userId: user.Id,
+    action: AuditActionType.Login.ToString(),
+    ipAddress: ipAddress,
+    userAgent: userAgent
+);
+```
+
+## API Endpoints
+
+**Location:** `src/Web/Endpoints/Authentication.cs:85`
+
+### Get All Audit Logs (Admin)
+
+```http
+GET /api/authentication/audit-logs?pageNumber=1&pageSize=20&action=LOGIN
+Authorization: Bearer {admin-token}
+```
+
+**Query Parameters:**
+- `pageNumber` (default: 1)
+- `pageSize` (default: 20)
+- `action` (optional): Filter by action type
+
+**Response:**
+
+```json
+[
+  {
+    "id": "guid-1",
+    "userId": "user-123",
+    "action": "LOGIN",
+    "ipAddress": "192.168.1.100",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)...",
+    "timestamp": "2024-01-10T15:30:00Z",
+    "details": "User logged in successfully",
+    "status": "SUCCESS",
+    "errorMessage": null,
+    "resourceId": null,
+    "resourceType": null
+  },
+  {
+    "id": "guid-2",
+    "userId": "user-456",
+    "action": "FAILED_LOGIN",
+    "ipAddress": "192.168.1.200",
+    "userAgent": "Mozilla/5.0...",
+    "timestamp": "2024-01-10T15:25:00Z",
+    "details": null,
+    "status": "FAILED",
+    "errorMessage": "Invalid credentials",
+    "resourceId": null,
+    "resourceType": null
+  }
+]
+```
+
+**Authorization:** Requires `CanPurge` permission
+
+### Get User Audit Logs
+
+```http
+GET /api/authentication/audit-logs/user/{userId}?pageNumber=1&pageSize=20
+Authorization: Bearer {token}
+```
+
+**Response:** Same format as above, filtered by userId
+
+**Authorization:** Users can view their own logs, admins can view any user's logs
+
+## Logging Console Output
+
+The service logs to console with emojis for visibility:
+
+```csharp
+_logger.LogInformation(
+    "📝 Audit Log guardado: {Action} - Usuario: {UserId} - Status: {Status}", 
+    action, userId, status
+);
+```
+
+**Console output:**
+```
+📝 Audit Log guardado: LOGIN - Usuario: user-123 - Status: SUCCESS (Registros: 1)
+```
+
+## Common Integration Patterns
+
+### Authentication Events
+
+```csharp
+// In LoginCommandHandler
+if (loginSuccessful)
+{
+    await _auditLogService.LogLoginAsync(
+        userId: user.Id,
+        ipAddress: command.IpAddress,
+        userAgent: command.UserAgent
+    );
+}
+else
+{
+    await _auditLogService.LogFailedLoginAsync(
+        userId: command.Email,
+        ipAddress: command.IpAddress,
+        userAgent: command.UserAgent,
+        error: "Invalid email or password"
+    );
+}
+```
+
+### Two-Factor Authentication
+
+```csharp
+// Enable 2FA
+await _auditLogService.LogActionAsync(
+    userId: user.Id,
+    action: "TWO_FACTOR_ENABLED",
+    ipAddress: ipAddress,
+    userAgent: userAgent,
+    details: "Two-factor authentication enabled by user"
+);
+
+// Validate 2FA
+await _auditLogService.LogActionAsync(
+    userId: user.Id,
+    action: isValid ? "TWO_FACTOR_VALIDATED" : "TWO_FACTOR_FAILED",
+    ipAddress: ipAddress,
+    userAgent: userAgent,
+    status: isValid ? "SUCCESS" : "FAILED",
+    errorMessage: isValid ? null : "Invalid verification code"
+);
+```
+
+### User Management
+
+```csharp
+// Create user
+await _auditLogService.LogActionAsync(
+    userId: currentUser.Id,
+    action: "USER_CREATED",
+    ipAddress: ipAddress,
+    userAgent: userAgent,
+    details: $"Created new user: {newUser.Email}",
+    resourceId: newUser.Id,
+    resourceType: "User"
+);
+
+// Update user
+await _auditLogService.LogActionAsync(
+    userId: currentUser.Id,
+    action: "USER_UPDATED",
+    ipAddress: ipAddress,
+    userAgent: userAgent,
+    details: $"Updated user profile",
+    resourceId: targetUser.Id,
+    resourceType: "User"
+);
+
+// Delete user
+await _auditLogService.LogActionAsync(
+    userId: currentUser.Id,
+    action: "USER_DELETED",
+    ipAddress: ipAddress,
+    userAgent: userAgent,
+    details: $"Deleted user: {targetUser.Email}",
+    resourceId: targetUser.Id,
+    resourceType: "User"
+);
+```
+
+### Security Events
+
+```csharp
+// IP blocked
+await _auditLogService.LogActionAsync(
+    userId: "system",
+    action: "SECURITY_ALERT",
+    ipAddress: blockedIp,
+    details: $"IP address blocked: {reason}",
+    status: "WARNING",
+    resourceId: blockedIp,
+    resourceType: "IpBlackList"
+);
+
+// Password changed
+await _auditLogService.LogActionAsync(
+    userId: user.Id,
+    action: "PASSWORD_CHANGED",
+    ipAddress: ipAddress,
+    userAgent: userAgent,
+    details: "User changed their password"
+);
+```
+
+### Error Logging
+
+```csharp
+try
+{
+    // Perform operation
+}
+catch (Exception ex)
+{
+    await _auditLogService.LogActionAsync(
+        userId: currentUser.Id,
+        action: "ERROR",
+        ipAddress: ipAddress,
+        userAgent: userAgent,
+        details: $"Operation failed: {operationName}",
+        status: "ERROR",
+        errorMessage: ex.Message
+    );
+    throw;
+}
+```
+
+## Best Practices
+
+### What to Log
+
+**Always log:**
+- Authentication events (login, logout, failures)
+- Authorization failures
+- Password changes and resets
+- User account changes (create, update, delete)
+- Role and permission changes
+- Security events (IP blocks, suspicious activity)
+- Administrative actions
+
+**Consider logging:**
+- Critical business operations
+- Data access patterns
+- Configuration changes
+- API calls to external services
+
+**Don't log:**
+- Passwords or secrets
+- Sensitive personal data (unless required for compliance)
+- High-volume routine operations
+
+### Performance Considerations
+
+**Fire-and-forget logging:**
+
+```csharp
+// Don't await audit logs in critical paths
+_ = _auditLogService.LogActionAsync(...); // Fire and forget
+
+// Or use Task.Run for background logging
+Task.Run(async () => await _auditLogService.LogActionAsync(...));
+```
+
+**Batch operations:**
+
+For bulk operations, consider batching audit logs:
+
+```csharp
+var auditLogs = new List<AuditLog>();
+
+foreach (var user in usersToDelete)
+{
+    // Perform delete
+    auditLogs.Add(AuditLog.Create(...));
+}
+
+_context.AuditLogs.AddRange(auditLogs);
+await _context.SaveChangesAsync();
+```
+
+### Data Retention
+
+Implement retention policies:
+
+```csharp
+// Delete logs older than 90 days
+public async Task CleanupOldLogsAsync(int retentionDays = 90)
+{
+    var cutoffDate = DateTime.UtcNow.AddDays(-retentionDays);
+    
+    var oldLogs = await _context.AuditLogs
+        .Where(al => al.Timestamp < cutoffDate)
+        .ToListAsync();
+    
+    _context.AuditLogs.RemoveRange(oldLogs);
+    await _context.SaveChangesAsync();
+}
+```
+
+### Querying Large Datasets
+
+Use indexes on frequently queried fields:
+
+```csharp
+// In ApplicationDbContext configuration
+modelBuilder.Entity<AuditLog>()
+    .HasIndex(al => al.UserId);
+    
+modelBuilder.Entity<AuditLog>()
+    .HasIndex(al => al.Action);
+    
+modelBuilder.Entity<AuditLog>()
+    .HasIndex(al => al.Timestamp);
+```
+
+### Compliance and Security
+
+**Immutable logs:**
+Audit logs should never be modified or deleted by users. Only automated retention policies should remove logs.
+
+**Access control:**
+Restrict access to audit logs to administrators only.
+
+**Tamper protection:**
+Consider adding cryptographic signatures to audit logs for compliance requirements.
+
+## Error Handling
+
+Audit logging failures should never break the main operation:
+
+```csharp
+public async Task LogActionAsync(...)
+{
+    try
+    {
+        var auditLog = AuditLog.Create(...);
+        _dbContext.Set<AuditLog>().Add(auditLog);
+        await _dbContext.SaveChangesAsync();
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "❌ Error guardando audit log: {Action} - {UserId}", 
+            action, userId);
+        // Don't throw - audit logging should not break operations
+    }
+}
+```
+
+## Implementation Details
+
+**File locations:**
+- AuditLog Entity: `src/Domain/Entities/AuditLog.cs:6`
+- AuditLogService: `src/Infrastructure/Services/AuditLogService.cs:13`
+- AuditActionType Enum: `src/Domain/Enums/AuthEnums.cs:6`
+- Audit Logs Endpoint: `src/Web/Endpoints/Authentication.cs:85`
+- User Audit Logs Endpoint: `src/Web/Endpoints/Authentication.cs:241`
+
+## See Also
+
+- [JWT Authentication](/security/jwt-authentication)
+- [Two-Factor Authentication](/security/two-factor-auth)
+- [IP Blocking](/security/ip-blocking)

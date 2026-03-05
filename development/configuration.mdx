@@ -1,0 +1,666 @@
+---
+title: Configuration
+description: Manage application settings, connection strings, and environment-specific configuration
+---
+
+SAPFIAI uses ASP.NET Core's configuration system to manage application settings across different environments. Configuration is loaded from multiple sources with a clear precedence order.
+
+## Configuration Files
+
+Configuration files are located in the `src/Web/` directory:
+
+```
+src/Web/
+├── appsettings.json              # Base configuration for all environments
+├── appsettings.Development.json  # Development overrides
+├── appsettings.Production.json   # Production overrides
+└── .env                          # Local environment variables (not in source control)
+```
+
+## Base Configuration
+
+The main configuration file is `appsettings.json`:
+
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=(localdb)\\mssqllocaldb;Database=SAPFIAIDb;Trusted_Connection=True;MultipleActiveResultSets=true"
+  },
+  "Jwt": {
+    "Key": "CHANGE-ME-USE-USER-SECRETS-OR-ENV-VARS",
+    "Issuer": "SAPFIAI",
+    "Audience": "SAPFIAI-Users",
+    "ExpireMinutes": "60",
+    "RefreshTokenExpirationDays": "7"
+  },
+  "Security": {
+    "RefreshToken": {
+      "ExpirationDays": 7,
+      "MaxActiveTokensPerUser": 5
+    },
+    "RateLimiting": {
+      "MaxAttemptsPerIp": 5,
+      "WindowMinutes": 15,
+      "IpBlockDurationMinutes": 60
+    },
+    "AccountLock": {
+      "MaxFailedAttempts": 5,
+      "LockoutMinutes": 15,
+      "ResetFailedAttemptsAfterMinutes": 60
+    },
+    "BlackList": {
+      "EnableAutoBlock": true,
+      "AutoBlockAfterAttempts": 10,
+      "AutoBlockDurationHours": 24
+    }
+  },
+  "App": {
+    "BaseUrl": "https://localhost:5001"
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft": "Warning",
+      "Microsoft.Hosting.Lifetime": "Information"
+    }
+  },
+  "AllowedHosts": "*"
+}
+```
+
+<Warning>
+  Never commit sensitive values like JWT keys to source control. Use user secrets or environment variables instead.
+</Warning>
+
+## Environment-Specific Configuration
+
+### Development Settings
+
+`appsettings.Development.json` overrides settings for local development:
+
+```json
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft": "Warning",
+      "Microsoft.AspNetCore.SpaProxy": "Information",
+      "Microsoft.Hosting.Lifetime": "Information"
+    }
+  }
+}
+```
+
+### Production Settings
+
+`appsettings.Production.json` contains production-specific overrides:
+
+```json
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Warning",
+      "Microsoft": "Warning",
+      "Microsoft.Hosting.Lifetime": "Information"
+    }
+  }
+}
+```
+
+### Setting the Environment
+
+Control which configuration file is loaded:
+
+```bash
+# Development (default)
+export ASPNETCORE_ENVIRONMENT=Development
+dotnet run --project src/Web
+
+# Production
+export ASPNETCORE_ENVIRONMENT=Production
+dotnet run --project src/Web
+
+# Staging
+export ASPNETCORE_ENVIRONMENT=Staging
+dotnet run --project src/Web
+```
+
+## Environment Variables
+
+Environment variables override configuration files and are loaded from `.env` files.
+
+### .env File Loading
+
+The application loads `.env` files automatically from `Program.cs:4`:
+
+```csharp
+// Load environment variables from .env file BEFORE building configuration
+var possibleEnvPaths = new[]
+{
+    Path.Combine(Directory.GetCurrentDirectory(), ".env"),
+    Path.Combine(Directory.GetCurrentDirectory(), "..", "..", ".env"),
+    Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ".env"),
+    Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "..", ".env")
+};
+
+foreach (var envPath in possibleEnvPaths)
+{
+    if (File.Exists(envPath))
+    {
+        Console.WriteLine($"🔧 Cargando variables de entorno desde: {Path.GetFullPath(envPath)}");
+        foreach (var line in File.ReadAllLines(envPath))
+        {
+            if (string.IsNullOrWhiteSpace(line) || line.StartsWith("#"))
+                continue;
+
+            var parts = line.Split('=', 2);
+            if (parts.Length == 2)
+            {
+                var key = parts[0].Trim();
+                var value = parts[1].Trim();
+                Environment.SetEnvironmentVariable(key, value);
+            }
+        }
+        break;
+    }
+}
+```
+
+### Creating a .env File
+
+Create a `.env` file in your project root (add to `.gitignore`):
+
+```bash
+# Database
+ConnectionStrings__DefaultConnection=Server=localhost;Database=SAPFIAIDb;User Id=sa;Password=YourPassword123!
+
+# JWT
+Jwt__Key=your-super-secret-jwt-key-min-32-characters-long
+Jwt__Issuer=SAPFIAI
+Jwt__Audience=SAPFIAI-Users
+
+# App Settings
+App__BaseUrl=https://your-domain.com
+
+# Skip database initialization
+SKIP_DB_INIT=false
+```
+
+<Note>
+  Use double underscores (`__`) to represent nested configuration sections.
+</Note>
+
+### Environment Variable Syntax
+
+Map environment variables to configuration:
+
+```bash
+# appsettings.json path: ConnectionStrings:DefaultConnection
+# Environment variable:
+ConnectionStrings__DefaultConnection="Server=...;"
+
+# appsettings.json path: Jwt:Key
+# Environment variable:
+Jwt__Key="your-secret-key"
+
+# appsettings.json path: Security:RateLimiting:MaxAttemptsPerIp
+# Environment variable:
+Security__RateLimiting__MaxAttemptsPerIp=10
+```
+
+## Connection Strings
+
+### Development Connection String
+
+For local development with SQL Server LocalDB:
+
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=(localdb)\\mssqllocaldb;Database=SAPFIAIDb;Trusted_Connection=True;MultipleActiveResultSets=true"
+  }
+}
+```
+
+### Production Connection String
+
+For production SQL Server:
+
+```bash
+# .env file
+ConnectionStrings__DefaultConnection=Server=prod-server.database.windows.net;Database=SAPFIAIDb;User Id=sapfiai_user;Password=***;Encrypt=True;TrustServerCertificate=False;
+```
+
+### SQLite for Testing
+
+For lightweight testing scenarios:
+
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Data Source=sapfiai.db"
+  }
+}
+```
+
+<Tip>
+  Use SQL Server LocalDB for development to match production behavior more closely.
+</Tip>
+
+## Configuration Sections
+
+### JWT Configuration
+
+Manage JWT authentication settings:
+
+```json
+{
+  "Jwt": {
+    "Key": "your-secret-key-must-be-at-least-32-chars",
+    "Issuer": "SAPFIAI",
+    "Audience": "SAPFIAI-Users",
+    "ExpireMinutes": "60",
+    "RefreshTokenExpirationDays": "7"
+  }
+}
+```
+
+<ParamField path="Key" type="string" required>
+  Secret key for signing JWTs. Must be at least 32 characters. **Never commit to source control.**
+</ParamField>
+
+<ParamField path="Issuer" type="string" required>
+  Token issuer identifier (typically your application name)
+</ParamField>
+
+<ParamField path="Audience" type="string" required>
+  Intended audience for the token (typically your API consumers)
+</ParamField>
+
+<ParamField path="ExpireMinutes" type="string" default="60">
+  Access token expiration time in minutes
+</ParamField>
+
+<ParamField path="RefreshTokenExpirationDays" type="string" default="7">
+  Refresh token expiration time in days
+</ParamField>
+
+### Security Configuration
+
+Configure security features like rate limiting and account lockout:
+
+```json
+{
+  "Security": {
+    "RefreshToken": {
+      "ExpirationDays": 7,
+      "MaxActiveTokensPerUser": 5
+    },
+    "RateLimiting": {
+      "MaxAttemptsPerIp": 5,
+      "WindowMinutes": 15,
+      "IpBlockDurationMinutes": 60
+    },
+    "AccountLock": {
+      "MaxFailedAttempts": 5,
+      "LockoutMinutes": 15,
+      "ResetFailedAttemptsAfterMinutes": 60
+    },
+    "BlackList": {
+      "EnableAutoBlock": true,
+      "AutoBlockAfterAttempts": 10,
+      "AutoBlockDurationHours": 24
+    }
+  }
+}
+```
+
+### Logging Configuration
+
+Control logging levels per namespace:
+
+```json
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft": "Warning",
+      "Microsoft.Hosting.Lifetime": "Information",
+      "Microsoft.EntityFrameworkCore": "Warning"
+    }
+  }
+}
+```
+
+Log levels (from most to least verbose):
+- `Trace` - Very detailed diagnostic information
+- `Debug` - Debugging information
+- `Information` - General informational messages
+- `Warning` - Warning messages
+- `Error` - Error messages
+- `Critical` - Critical failure messages
+- `None` - No logging
+
+### App Configuration
+
+Application-specific settings:
+
+```json
+{
+  "App": {
+    "BaseUrl": "https://localhost:5001",
+    "AllowedOrigins": [
+      "http://localhost:3000",
+      "https://your-frontend.com"
+    ]
+  }
+}
+```
+
+## User Secrets (Development)
+
+For local development, use User Secrets to store sensitive data outside of your project:
+
+### Initialize User Secrets
+
+```bash
+cd src/Web
+dotnet user-secrets init
+```
+
+### Set Secrets
+
+```bash
+# JWT Key
+dotnet user-secrets set "Jwt:Key" "your-super-secret-jwt-key-for-development"
+
+# Connection String
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Server=localhost;Database=SAPFIAIDb;User Id=sa;Password=DevPassword123!"
+```
+
+### List Secrets
+
+```bash
+dotnet user-secrets list
+```
+
+### Remove Secrets
+
+```bash
+dotnet user-secrets remove "Jwt:Key"
+
+# Remove all secrets
+dotnet user-secrets clear
+```
+
+<Note>
+  User secrets are stored in your user profile directory and never committed to source control.
+</Note>
+
+## Accessing Configuration
+
+### In Dependency Injection
+
+Inject `IConfiguration` or use the Options pattern:
+
+```csharp
+public class MyService
+{
+    private readonly IConfiguration _configuration;
+
+    public MyService(IConfiguration configuration)
+    {
+        _configuration = configuration;
+    }
+
+    public void DoSomething()
+    {
+        var connectionString = _configuration.GetConnectionString("DefaultConnection");
+        var jwtKey = _configuration["Jwt:Key"];
+        var maxAttempts = _configuration.GetValue<int>("Security:RateLimiting:MaxAttemptsPerIp");
+    }
+}
+```
+
+### Using Options Pattern
+
+Define strongly-typed configuration classes:
+
+```csharp
+// Configuration class
+public class JwtSettings
+{
+    public string Key { get; set; } = string.Empty;
+    public string Issuer { get; set; } = string.Empty;
+    public string Audience { get; set; } = string.Empty;
+    public int ExpireMinutes { get; set; }
+    public int RefreshTokenExpirationDays { get; set; }
+}
+
+// Register in DependencyInjection.cs
+services.Configure<JwtSettings>(configuration.GetSection("Jwt"));
+
+// Inject in service
+public class TokenService
+{
+    private readonly JwtSettings _jwtSettings;
+
+    public TokenService(IOptions<JwtSettings> jwtSettings)
+    {
+        _jwtSettings = jwtSettings.Value;
+    }
+
+    public string GenerateToken()
+    {
+        var key = _jwtSettings.Key;
+        var issuer = _jwtSettings.Issuer;
+        // ...
+    }
+}
+```
+
+## Configuration Precedence
+
+Configuration sources are applied in this order (later sources override earlier ones):
+
+<Steps>
+  <Step title="appsettings.json">
+    Base configuration for all environments
+  </Step>
+
+  <Step title="appsettings.{Environment}.json">
+    Environment-specific overrides
+  </Step>
+
+  <Step title="User Secrets (Development only)">
+    Local developer secrets
+  </Step>
+
+  <Step title="Environment Variables">
+    System and .env file variables
+  </Step>
+
+  <Step title="Command Line Arguments">
+    Arguments passed to `dotnet run`
+  </Step>
+</Steps>
+
+### Example Precedence
+
+Given these configurations:
+
+```json
+// appsettings.json
+{
+  "Jwt": {
+    "Key": "default-key",
+    "ExpireMinutes": "60"
+  }
+}
+
+// appsettings.Production.json
+{
+  "Jwt": {
+    "ExpireMinutes": "30"
+  }
+}
+```
+
+```bash
+# .env
+Jwt__Key=production-secret-key
+```
+
+In Production environment:
+- `Jwt:Key` = `"production-secret-key"` (from .env)
+- `Jwt:ExpireMinutes` = `"30"` (from appsettings.Production.json)
+
+## Special Configuration
+
+### Skip Database Initialization
+
+Prevent automatic database initialization on startup:
+
+```bash
+# Environment variable
+export SKIP_DB_INIT=true
+
+# Or in appsettings.json
+{
+  "SkipDatabaseInitialization": true
+}
+```
+
+Implemented in `Program.cs:51`:
+
+```csharp
+var skipDatabaseInitialization = builder.Configuration.GetValue<bool>("SkipDatabaseInitialization")
+    || string.Equals(Environment.GetEnvironmentVariable("SKIP_DB_INIT"), "true", StringComparison.OrdinalIgnoreCase)
+    || Environment.GetEnvironmentVariable("SKIP_DB_INIT") == "1";
+```
+
+### CORS Configuration
+
+Configure Cross-Origin Resource Sharing for frontend applications:
+
+```json
+{
+  "Cors": {
+    "AllowedOrigins": [
+      "http://localhost:3000",
+      "https://your-app.com"
+    ],
+    "AllowedMethods": ["GET", "POST", "PUT", "DELETE"],
+    "AllowedHeaders": ["*"],
+    "AllowCredentials": true
+  }
+}
+```
+
+## Deployment Configuration
+
+### Azure App Service
+
+Set configuration in Application Settings (environment variables):
+
+```bash
+ConnectionStrings__DefaultConnection=Server=...;
+Jwt__Key=...
+ASPNETCORE_ENVIRONMENT=Production
+```
+
+### Docker
+
+Pass environment variables in `docker run`:
+
+```bash
+docker run -d \
+  -e ConnectionStrings__DefaultConnection="Server=...;" \
+  -e Jwt__Key="your-production-key" \
+  -e ASPNETCORE_ENVIRONMENT=Production \
+  -p 80:8080 \
+  sapfiai-api
+```
+
+Or use a `.env` file with Docker Compose:
+
+```yaml
+# docker-compose.yml
+services:
+  api:
+    image: sapfiai-api
+    env_file:
+      - .env.production
+    ports:
+      - "80:8080"
+```
+
+### Kubernetes
+
+Use ConfigMaps and Secrets:
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: sapfiai-secrets
+type: Opaque
+stringData:
+  jwt-key: your-production-jwt-key
+  connection-string: Server=...;
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sapfiai-config
+data:
+  ASPNETCORE_ENVIRONMENT: "Production"
+  Logging__LogLevel__Default: "Warning"
+```
+
+## Troubleshooting
+
+### Configuration Not Loading
+
+Verify configuration is being read:
+
+```csharp
+// In Startup or Program.cs
+var config = builder.Configuration.AsEnumerable();
+foreach (var item in config)
+{
+    Console.WriteLine($"{item.Key} = {item.Value}");
+}
+```
+
+### Environment Variables Not Working
+
+Check environment variable syntax:
+
+```bash
+# Wrong (Linux/Mac)
+JWT:KEY=value  # Colon not supported
+
+# Correct
+Jwt__Key=value  # Double underscore
+```
+
+### Connection String Errors
+
+Test connection string:
+
+```csharp
+var connectionString = configuration.GetConnectionString("DefaultConnection");
+Console.WriteLine($"Connection string: {connectionString}");
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Database Migrations" icon="database" href="/development/database-migrations">
+    Apply schema changes to your configured database
+  </Card>
+  <Card title="Deployment" icon="rocket" href="/deployment/hosting">
+    Deploy with production configuration
+  </Card>
+</CardGroup>

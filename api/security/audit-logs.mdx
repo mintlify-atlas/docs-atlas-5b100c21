@@ -1,0 +1,237 @@
+---
+title: Audit Logs
+description: API endpoints for retrieving and monitoring authentication audit logs
+---
+
+## Get All Audit Logs
+
+Retrieves a paginated list of all audit logs in the system. Requires `CanPurge` authorization.
+
+```http
+GET /authentication/audit-logs
+```
+
+### Query Parameters
+
+<ParamField query="pageNumber" type="integer" default="1">
+  Page number for pagination
+</ParamField>
+
+<ParamField query="pageSize" type="integer" default="20">
+  Number of records per page
+</ParamField>
+
+<ParamField query="action" type="string" optional>
+  Filter by specific action type (e.g., "Login", "Logout", "Register")
+</ParamField>
+
+### Authorization
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with `CanPurge` permission
+</ParamField>
+
+### Response
+
+Returns an array of audit log entries.
+
+<ResponseField name="id" type="integer">
+  Unique identifier for the audit log entry
+</ResponseField>
+
+<ResponseField name="userId" type="string">
+  ID of the user associated with the action
+</ResponseField>
+
+<ResponseField name="userEmail" type="string">
+  Email address of the user
+</ResponseField>
+
+<ResponseField name="action" type="string">
+  Type of action performed (Login, Logout, Register, etc.)
+</ResponseField>
+
+<ResponseField name="ipAddress" type="string">
+  IP address from which the action originated
+</ResponseField>
+
+<ResponseField name="userAgent" type="string">
+  User agent string of the client
+</ResponseField>
+
+<ResponseField name="timestamp" type="datetime">
+  When the action occurred
+</ResponseField>
+
+<ResponseField name="details" type="string">
+  Additional details about the action
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Status of the action (Success, Failed, etc.)
+</ResponseField>
+
+<ResponseField name="errorMessage" type="string">
+  Error message if the action failed
+</ResponseField>
+
+<ResponseField name="resourceId" type="string">
+  ID of the resource affected by the action
+</ResponseField>
+
+<ResponseField name="resourceType" type="string">
+  Type of resource affected
+</ResponseField>
+
+### Example Request
+
+```bash
+curl -X GET "https://api.example.com/authentication/audit-logs?pageNumber=1&pageSize=20&action=Login" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+### Example Response
+
+```json
+[
+  {
+    "id": 1,
+    "userId": "user123",
+    "userEmail": "john.doe@example.com",
+    "action": "Login",
+    "ipAddress": "192.168.1.100",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "timestamp": "2024-03-15T10:30:00Z",
+    "details": "Successful login",
+    "status": "Success",
+    "errorMessage": null,
+    "resourceId": null,
+    "resourceType": null
+  },
+  {
+    "id": 2,
+    "userId": "user456",
+    "userEmail": "jane.smith@example.com",
+    "action": "LoginFailed",
+    "ipAddress": "192.168.1.101",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+    "timestamp": "2024-03-15T10:25:00Z",
+    "details": "Invalid credentials",
+    "status": "Failed",
+    "errorMessage": "Invalid username or password",
+    "resourceId": null,
+    "resourceType": null
+  }
+]
+```
+
+## Get User Audit Logs
+
+Retrieves audit logs for a specific user. Requires authentication.
+
+```http
+GET /authentication/audit-logs/user/{userId}
+```
+
+### Path Parameters
+
+<ParamField path="userId" type="string" required>
+  The unique identifier of the user
+</ParamField>
+
+### Query Parameters
+
+<ParamField query="pageNumber" type="integer" default="1">
+  Page number for pagination
+</ParamField>
+
+<ParamField query="pageSize" type="integer" default="20">
+  Number of records per page
+</ParamField>
+
+### Authorization
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with valid authentication
+</ParamField>
+
+### Response
+
+Returns an array of audit log entries for the specified user with the same structure as the Get All Audit Logs endpoint.
+
+### Example Request
+
+```bash
+curl -X GET "https://api.example.com/authentication/audit-logs/user/user123?pageNumber=1&pageSize=10" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+### Example Response
+
+```json
+[
+  {
+    "id": 15,
+    "userId": "user123",
+    "userEmail": "john.doe@example.com",
+    "action": "Login",
+    "ipAddress": "192.168.1.100",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "timestamp": "2024-03-15T10:30:00Z",
+    "details": "Successful login with 2FA",
+    "status": "Success",
+    "errorMessage": null,
+    "resourceId": null,
+    "resourceType": null
+  },
+  {
+    "id": 14,
+    "userId": "user123",
+    "userEmail": "john.doe@example.com",
+    "action": "TwoFactorEnabled",
+    "ipAddress": "192.168.1.100",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "timestamp": "2024-03-15T09:15:00Z",
+    "details": "Two-factor authentication enabled",
+    "status": "Success",
+    "errorMessage": null,
+    "resourceId": "user123",
+    "resourceType": "User"
+  }
+]
+```
+
+## Common Action Types
+
+The following action types are tracked in audit logs:
+
+- **Authentication**: `Login`, `LoginFailed`, `Logout`, `Register`, `PasswordChanged`, `PasswordReset`
+- **Two-Factor**: `TwoFactorEnabled`, `TwoFactorDisabled`, `TwoFactorValidated`, `TwoFactorFailed`
+- **Token Management**: `RefreshToken`, `TokenRevoked`
+- **User Management**: `UserCreated`, `UserUpdated`, `UserDeleted`, `UserActivated`, `UserDeactivated`
+- **Role & Permissions**: `RoleCreated`, `RoleUpdated`, `RoleDeleted`, `PermissionAssigned`, `PermissionRevoked`
+- **Security**: `SecurityAlert`, `Error`
+
+## Error Responses
+
+<ResponseExample>
+
+```json 401 Unauthorized
+{
+  "type": "https://tools.ietf.org/html/rfc7231#section-6.5.1",
+  "title": "Unauthorized",
+  "status": 401,
+  "detail": "Authentication required"
+}
+```
+
+```json 403 Forbidden
+{
+  "type": "https://tools.ietf.org/html/rfc7231#section-6.5.3",
+  "title": "Forbidden",
+  "status": 403,
+  "detail": "CanPurge permission required"
+}
+```
+
+</ResponseExample>

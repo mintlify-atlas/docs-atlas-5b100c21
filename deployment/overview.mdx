@@ -1,0 +1,136 @@
+---
+title: Deployment Overview
+description: Overview of deployment options and production considerations for SAPFIAI Clean Architecture API
+---
+
+## Deployment Options
+
+SAPFIAI can be deployed to various hosting environments that support .NET 8.0 applications:
+
+- **SmarterASP.NET / Site4now.net**: Windows hosting with SQL Server support (recommended for this project)
+- **Azure App Service**: Cloud-native PaaS with auto-scaling
+- **IIS on Windows Server**: On-premises or VM-based deployment
+- **Docker containers**: Cross-platform containerized deployment
+- **Linux servers with Kestrel**: Reverse proxy with nginx/Apache
+
+## Production Considerations
+
+### Performance
+
+- Use **Release** configuration for optimized builds
+- Enable **ReadyToRun (R2R)** compilation for faster startup (optional)
+- Configure connection pooling for database connections
+- Implement caching strategies (distributed cache for multi-instance scenarios)
+
+### Security
+
+- **Never commit secrets** to source control
+- Use environment variables or secure vaults for sensitive configuration
+- Configure HTTPS/TLS certificates
+- Set appropriate CORS policies
+- Enable rate limiting and account lockout features (already configured)
+- Review and harden JWT settings
+
+### Monitoring
+
+- Configure production logging levels (Warning/Error)
+- Implement health checks (`/health` endpoint available)
+- Set up application performance monitoring (APM)
+- Monitor database performance and connection pool metrics
+
+### Scalability
+
+- Stateless API design enables horizontal scaling
+- Use distributed caching (Redis) for multi-instance deployments
+- Configure database connection pooling appropriately
+- Consider read replicas for read-heavy workloads
+
+## Configuration for Production
+
+### appsettings.Production.json
+
+The production configuration file should contain environment-specific settings:
+
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=your-server;Database=SAPFIAIDb;User Id=user;Password=pass;MultipleActiveResultSets=true"
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Warning",
+      "Microsoft": "Warning",
+      "Microsoft.Hosting.Lifetime": "Information"
+    }
+  },
+  "AllowedHosts": "*"
+}
+```
+
+### Environment Variables
+
+For enhanced security, configure sensitive values via environment variables:
+
+| Variable | Description | Example |
+|----------|-------------|----------|
+| `ConnectionStrings__DefaultConnection` | Database connection string | `Server=...;Database=...` |
+| `Jwt__Key` | JWT signing key (min 32 chars) | `your-secure-key-here` |
+| `Jwt__Issuer` | JWT token issuer | `SAPFIAI` |
+| `Jwt__Audience` | JWT token audience | `SAPFIAI-Users` |
+| `App__BaseUrl` | Application base URL | `https://yourdomain.com` |
+
+**Note**: Environment variables use double underscores (`__`) to represent nested configuration sections.
+
+## Database Setup
+
+### Option 1: Apply Migrations Automatically
+
+The application can apply migrations on startup (configure in `Program.cs` if enabled).
+
+### Option 2: Generate and Run SQL Scripts
+
+1. Generate migration script:
+   ```bash
+   dotnet ef migrations script --project src/Infrastructure --startup-project src/Web --output migration.sql
+   ```
+
+2. Review the generated `migration.sql` file
+
+3. Execute the script against your production database using:
+   - SQL Server Management Studio (SSMS)
+   - Azure Data Studio
+   - Your hosting provider's SQL panel
+
+### Option 3: Run Migrations via CLI
+
+With appropriate connection string configured:
+
+```bash
+dotnet ef database update --project src/Infrastructure --startup-project src/Web
+```
+
+## Pre-Deployment Checklist
+
+- [ ] Update `appsettings.Production.json` with production values
+- [ ] Configure secure JWT keys (not the default)
+- [ ] Set up production database and connection string
+- [ ] Apply database migrations
+- [ ] Configure HTTPS/SSL certificates
+- [ ] Review security settings (CORS, rate limiting)
+- [ ] Set logging to appropriate production levels
+- [ ] Configure health check endpoints
+- [ ] Test the build in Release mode locally
+- [ ] Prepare rollback strategy
+
+## Post-Deployment Verification
+
+1. **Health Check**: Access `/health` endpoint to verify the application is running
+2. **Swagger UI**: Access `/swagger` to verify API documentation (disable in production if desired)
+3. **Database Connectivity**: Test endpoints that interact with the database
+4. **Authentication**: Test JWT token generation and validation
+5. **Logs**: Check application logs for errors or warnings
+
+## Next Steps
+
+- [Deploy to SmarterASP.NET](/deployment/smarterasp) - Step-by-step guide for SmarterASP.NET hosting
+- [CI/CD Pipeline](/deployment/cicd) - Automate deployments with GitHub Actions

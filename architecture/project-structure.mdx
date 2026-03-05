@@ -1,0 +1,767 @@
+---
+title: Project Structure
+description: Detailed breakdown of SAPFIAI's folder organization and key files
+---
+
+## Solution Overview
+
+The SAPFIAI solution follows a Clean Architecture structure with clear separation between layers:
+
+```
+SAPFIAI.sln
+├── src/
+│   ├── Domain/              # Core business logic (no dependencies)
+│   ├── Application/         # Use cases and business workflows
+│   ├── Infrastructure/      # Data access and external services
+│   └── Web/                 # API endpoints and HTTP concerns
+└── tests/
+    ├── Domain.UnitTests/
+    ├── Application.UnitTests/
+    ├── Application.FunctionalTests/
+    └── Infrastructure.IntegrationTests/
+```
+
+## Domain Layer
+
+The Domain layer is the core of the application with **zero external dependencies**.
+
+### Structure
+
+```
+src/Domain/
+├── Common/
+│   ├── BaseEntity.cs              # Base class for all entities
+│   ├── BaseAuditableEntity.cs     # Entities with audit fields
+│   ├── BaseEvent.cs               # Domain events base
+│   └── ValueObject.cs             # Value objects base
+├── Constants/
+│   ├── Policies.cs                # Authorization policies
+│   └── Roles.cs                   # System roles
+├── Entities/
+│   ├── Permission.cs              # Permission entity
+│   ├── RolePermission.cs          # Role-Permission mapping
+│   ├── RefreshToken.cs            # JWT refresh tokens
+│   ├── AuditLog.cs                # Audit trail
+│   ├── LoginAttempt.cs            # Login tracking
+│   └── IpBlackList.cs             # IP blocking
+├── Enums/
+│   ├── AuthEnums.cs               # Authentication enumerations
+│   └── PriorityLevel.cs           # Priority levels
+├── Exceptions/
+│   └── UnsupportedColourException.cs
+├── ValueObjects/
+│   └── Colour.cs                  # Colour value object
+└── Domain.csproj
+```
+
+### Key Files
+
+<Tabs>
+  <Tab title="BaseEntity.cs">
+    Base class for all entities providing:
+    - Primary key (`Id`)
+    - Domain events collection
+    - Event management methods
+    
+    ```csharp
+    // src/Domain/Common/BaseEntity.cs
+    public abstract class BaseEntity
+    {
+        public int Id { get; set; }
+
+        private readonly List<BaseEvent> _domainEvents = new();
+
+        [NotMapped]
+        public IReadOnlyCollection<BaseEvent> DomainEvents 
+            => _domainEvents.AsReadOnly();
+
+        public void AddDomainEvent(BaseEvent domainEvent) { }
+        public void RemoveDomainEvent(BaseEvent domainEvent) { }
+        public void ClearDomainEvents() { }
+    }
+    ```
+    
+    **Location**: `src/Domain/Common/BaseEntity.cs:5-30`
+  </Tab>
+  
+  <Tab title="Permission.cs">
+    Core entity representing system permissions:
+    
+    ```csharp
+    // src/Domain/Entities/Permission.cs
+    public class Permission : BaseEntity
+    {
+        public string Name { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public string Module { get; set; } = string.Empty;
+        public bool IsActive { get; set; } = true;
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        
+        public ICollection<RolePermission> RolePermissions { get; set; } 
+            = new List<RolePermission>();
+    }
+    ```
+    
+    **Location**: `src/Domain/Entities/Permission.cs:6-37`
+  </Tab>
+  
+  <Tab title="Policies.cs">
+    Centralized authorization policy names:
+    
+    ```csharp
+    // src/Domain/Constants/Policies.cs
+    public static class Policies
+    {
+        public const string CanPurge = nameof(CanPurge);
+        public const string RequireAdministrator = nameof(RequireAdministrator);
+    }
+    ```
+    
+    **Location**: `src/Domain/Constants/Policies.cs`
+  </Tab>
+</Tabs>
+
+<Note>
+  Domain entities are **plain C# classes** with no framework dependencies. They can be tested without any infrastructure.
+</Note>
+
+## Application Layer
+
+The Application layer contains business workflows and use cases using **CQRS pattern**.
+
+### Structure
+
+```
+src/Application/
+├── Common/
+│   ├── Behaviours/                  # MediatR pipeline behaviors
+│   │   ├── AuthorizationBehaviour.cs
+│   │   ├── LoggingBehaviour.cs
+│   │   ├── PerformanceBehaviour.cs
+│   │   ├── UnhandledExceptionBehaviour.cs
+│   │   └── ValidationBehaviour.cs
+│   ├── Exceptions/
+│   │   ├── ForbiddenAccessException.cs
+│   │   └── ValidationException.cs
+│   ├── Interfaces/                  # Service contracts
+│   │   ├── IApplicationDbContext.cs
+│   │   ├── IIdentityService.cs
+│   │   ├── IEmailService.cs
+│   │   ├── IPermissionService.cs
+│   │   └── ... (15+ interfaces)
+│   ├── Models/                      # DTOs and responses
+│   │   ├── Result.cs
+│   │   ├── Error.cs
+│   │   ├── PermissionDto.cs
+│   │   ├── RoleDto.cs
+│   │   └── PagedResult.cs
+│   └── Security/
+│       └── AuthorizeAttribute.cs    # Custom authorization
+├── Permissions/                     # Permission feature
+│   ├── Commands/
+│   │   ├── CreatePermission/
+│   │   │   ├── CreatePermissionCommand.cs
+│   │   │   ├── CreatePermissionCommandHandler.cs
+│   │   │   └── CreatePermissionCommandValidator.cs
+│   │   ├── UpdatePermission/
+│   │   ├── DeletePermission/
+│   │   ├── AssignPermissionToRole/
+│   │   └── RemovePermissionFromRole/
+│   └── Queries/
+│       ├── GetPermissions/
+│       │   ├── GetPermissionsQuery.cs
+│       │   └── GetPermissionsQueryHandler.cs
+│       ├── GetPermissionById/
+│       └── GetRolePermissions/
+├── Roles/                           # Role management
+│   ├── Commands/
+│   └── Queries/
+├── Users/                           # User authentication
+│   ├── Commands/
+│   │   ├── Login/
+│   │   ├── Register/
+│   │   ├── RefreshToken/
+│   │   ├── EnableTwoFactor/
+│   │   └── ForgotPassword/
+│   └── Queries/
+├── Security/                        # Security operations
+│   ├── Commands/
+│   └── Queries/
+├── DependencyInjection.cs          # Service registration
+├── GlobalUsings.cs                 # Global using statements
+└── Application.csproj
+```
+
+### Key Patterns
+
+<AccordionGroup>
+  <Accordion title="Feature-Based Organization">
+    Each business feature (Permissions, Roles, Users) has its own folder with:
+    - **Commands**: Operations that modify state
+    - **Queries**: Operations that retrieve data
+    
+    Example: `Application/Permissions/Commands/CreatePermission/`
+    - `CreatePermissionCommand.cs` - The request
+    - `CreatePermissionCommandHandler.cs` - Business logic
+    - `CreatePermissionCommandValidator.cs` - Validation rules
+  </Accordion>
+  
+  <Accordion title="CQRS Separation">
+    Commands and Queries are strictly separated:
+    
+    **Commands** (Write operations):
+    ```
+    Commands/CreatePermission/
+    Commands/UpdatePermission/
+    Commands/DeletePermission/
+    ```
+    
+    **Queries** (Read operations):
+    ```
+    Queries/GetPermissions/
+    Queries/GetPermissionById/
+    Queries/GetRolePermissions/
+    ```
+  </Accordion>
+  
+  <Accordion title="Vertical Slice Architecture">
+    Each use case is self-contained in its own folder:
+    
+    ```
+    CreatePermission/
+    ├── CreatePermissionCommand.cs       # Request model
+    ├── CreatePermissionCommandHandler.cs # Business logic
+    └── CreatePermissionCommandValidator.cs # Validation
+    ```
+    
+    This makes features easy to find, modify, and test.
+  </Accordion>
+</AccordionGroup>
+
+### Critical Files
+
+<Tabs>
+  <Tab title="DependencyInjection.cs">
+    Registers all Application layer services:
+    
+    ```csharp
+    // src/Application/DependencyInjection.cs
+    public static class DependencyInjection
+    {
+        public static IServiceCollection AddApplicationServices(
+            this IServiceCollection services)
+        {
+            // AutoMapper for DTO mapping
+            services.AddAutoMapper(Assembly.GetExecutingAssembly());
+
+            // FluentValidation for validation
+            services.AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());
+
+            // MediatR for CQRS
+            services.AddMediatR(cfg => {
+                cfg.RegisterServicesFromAssembly(Assembly.GetExecutingAssembly());
+                cfg.AddBehavior(typeof(IPipelineBehavior<,>), 
+                    typeof(UnhandledExceptionBehaviour<,>));
+                cfg.AddBehavior(typeof(IPipelineBehavior<,>), 
+                    typeof(AuthorizationBehaviour<,>));
+                cfg.AddBehavior(typeof(IPipelineBehavior<,>), 
+                    typeof(ValidationBehaviour<,>));
+                cfg.AddBehavior(typeof(IPipelineBehavior<,>), 
+                    typeof(PerformanceBehaviour<,>));
+            });
+
+            return services;
+        }
+    }
+    ```
+    
+    **Location**: `src/Application/DependencyInjection.cs:8-24`
+  </Tab>
+  
+  <Tab title="IApplicationDbContext.cs">
+    Database abstraction interface:
+    
+    ```csharp
+    // src/Application/Common/Interfaces/IApplicationDbContext.cs
+    public interface IApplicationDbContext
+    {
+        DbSet<AuditLog> AuditLogs { get; }
+        DbSet<Permission> Permissions { get; }
+        DbSet<RolePermission> RolePermissions { get; }
+        DbSet<RefreshToken> RefreshTokens { get; }
+        DbSet<IpBlackList> IpBlackLists { get; }
+        DbSet<LoginAttempt> LoginAttempts { get; }
+
+        Task<int> SaveChangesAsync(CancellationToken cancellationToken);
+    }
+    ```
+    
+    **Location**: `src/Application/Common/Interfaces/IApplicationDbContext.cs:5-22`
+    
+    <Info>
+      This interface allows the Application layer to use the database without depending on Entity Framework.
+    </Info>
+  </Tab>
+  
+  <Tab title="ValidationBehaviour.cs">
+    Automatic validation for all requests:
+    
+    ```csharp
+    // src/Application/Common/Behaviours/ValidationBehaviour.cs
+    public class ValidationBehaviour<TRequest, TResponse> 
+        : IPipelineBehavior<TRequest, TResponse>
+        where TRequest : notnull
+    {
+        private readonly IEnumerable<IValidator<TRequest>> _validators;
+
+        public ValidationBehaviour(IEnumerable<IValidator<TRequest>> validators)
+        {
+            _validators = validators;
+        }
+
+        public async Task<TResponse> Handle(
+            TRequest request, 
+            RequestHandlerDelegate<TResponse> next, 
+            CancellationToken cancellationToken)
+        {
+            if (_validators.Any())
+            {
+                var context = new ValidationContext<TRequest>(request);
+
+                var validationResults = await Task.WhenAll(
+                    _validators.Select(v => v.ValidateAsync(context, cancellationToken)));
+
+                var failures = validationResults
+                    .Where(r => r.Errors.Any())
+                    .SelectMany(r => r.Errors)
+                    .ToList();
+
+                if (failures.Any())
+                    throw new ValidationException(failures);
+            }
+            return await next();
+        }
+    }
+    ```
+    
+    **Location**: `src/Application/Common/Behaviours/ValidationBehaviour.cs:5-35`
+  </Tab>
+</Tabs>
+
+## Infrastructure Layer
+
+The Infrastructure layer provides concrete implementations of Application interfaces.
+
+### Structure
+
+```
+src/Infrastructure/
+├── Authorization/
+│   ├── PermissionAuthorizationHandler.cs
+│   └── PermissionRequirement.cs
+├── BackgroundJobs/
+│   └── SecurityCleanupJob.cs         # Cleanup expired tokens/logs
+├── Data/
+│   ├── Configurations/               # Entity Framework configurations
+│   │   ├── PermissionConfiguration.cs
+│   │   ├── RolePermissionConfiguration.cs
+│   │   ├── AuditLogConfiguration.cs
+│   │   └── ... (6 configurations)
+│   ├── Interceptors/
+│   │   ├── AuditableEntityInterceptor.cs
+│   │   └── DispatchDomainEventsInterceptor.cs
+│   ├── Migrations/                   # EF Core migrations
+│   │   ├── 20260212195337_InitialAuthMigration.cs
+│   │   ├── 20260215221946_InitialCreate.cs
+│   │   └── ApplicationDbContextModelSnapshot.cs
+│   ├── ApplicationDbContext.cs       # Main DbContext
+│   └── ApplicationDbContextInitialiser.cs
+├── Identity/
+│   ├── ApplicationUser.cs            # ASP.NET Identity user
+│   └── IdentityService.cs            # Identity operations
+├── Services/                         # Service implementations
+│   ├── JwtTokenGenerator.cs
+│   ├── PermissionService.cs
+│   ├── RoleService.cs
+│   ├── EmailService.cs
+│   ├── TwoFactorService.cs
+│   ├── AuditLogService.cs
+│   ├── RefreshTokenService.cs
+│   ├── IpBlackListService.cs
+│   ├── LoginAttemptService.cs
+│   └── AccountLockService.cs
+├── DependencyInjection.cs            # Service registration
+└── Infrastructure.csproj
+```
+
+### Key Files
+
+<Tabs>
+  <Tab title="ApplicationDbContext.cs">
+    Entity Framework Core database context:
+    
+    ```csharp
+    // src/Infrastructure/Data/ApplicationDbContext.cs
+    public class ApplicationDbContext 
+        : IdentityDbContext<ApplicationUser>, IApplicationDbContext
+    {
+        public ApplicationDbContext(
+            DbContextOptions<ApplicationDbContext> options) 
+            : base(options) { }
+
+        public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+        public DbSet<Permission> Permissions => Set<Permission>();
+        public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
+        public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+        public DbSet<IpBlackList> IpBlackLists => Set<IpBlackList>();
+        public DbSet<LoginAttempt> LoginAttempts => Set<LoginAttempt>();
+
+        protected override void OnModelCreating(ModelBuilder builder)
+        {
+            builder.ApplyConfigurationsFromAssembly(
+                Assembly.GetExecutingAssembly());
+            base.OnModelCreating(builder);
+        }
+    }
+    ```
+    
+    **Location**: `src/Infrastructure/Data/ApplicationDbContext.cs:11-33`
+  </Tab>
+  
+  <Tab title="DependencyInjection.cs">
+    Registers all Infrastructure services:
+    
+    ```csharp
+    // src/Infrastructure/DependencyInjection.cs (simplified)
+    public static IServiceCollection AddInfrastructureServices(
+        this IServiceCollection services, 
+        IConfiguration configuration)
+    {
+        // Database
+        services.AddDbContext<ApplicationDbContext>(options =>
+            options.UseSqlServer(
+                configuration.GetConnectionString("DefaultConnection")));
+        
+        services.AddScoped<IApplicationDbContext>(
+            provider => provider.GetRequiredService<ApplicationDbContext>());
+
+        // Identity
+        services.AddIdentityCore<ApplicationUser>()
+            .AddRoles<IdentityRole>()
+            .AddEntityFrameworkStores<ApplicationDbContext>();
+
+        // JWT Authentication
+        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            .AddJwtBearer(options => { /* ... */ });
+
+        // Services
+        services.AddScoped<IPermissionService, PermissionService>();
+        services.AddScoped<IRoleService, RoleService>();
+        services.AddHttpClient<IEmailService, BrevoEmailService>();
+        services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
+        
+        // Background Jobs
+        services.AddHostedService<SecurityCleanupJob>();
+        
+        return services;
+    }
+    ```
+    
+    **Location**: `src/Infrastructure/DependencyInjection.cs:22-104`
+  </Tab>
+  
+  <Tab title="PermissionConfiguration.cs">
+    Entity Framework entity configuration:
+    
+    ```csharp
+    // src/Infrastructure/Data/Configurations/PermissionConfiguration.cs
+    public class PermissionConfiguration 
+        : IEntityTypeConfiguration<Permission>
+    {
+        public void Configure(EntityTypeBuilder<Permission> builder)
+        {
+            builder.Property(p => p.Name)
+                .HasMaxLength(100)
+                .IsRequired();
+
+            builder.HasIndex(p => p.Name)
+                .IsUnique();
+
+            builder.Property(p => p.Module)
+                .HasMaxLength(50)
+                .IsRequired();
+
+            builder.Property(p => p.Description)
+                .HasMaxLength(500);
+        }
+    }
+    ```
+    
+    **Location**: `src/Infrastructure/Data/Configurations/PermissionConfiguration.cs`
+  </Tab>
+</Tabs>
+
+## Web Layer
+
+The Web layer handles HTTP requests and API presentation.
+
+### Structure
+
+```
+src/Web/
+├── Endpoints/                        # Minimal API endpoints
+│   ├── Authentication.cs             # Login, register, refresh token
+│   ├── Permissions.cs                # Permission management
+│   ├── Roles.cs                      # Role management
+│   └── Security.cs                   # IP blocking, account locks
+├── Infrastructure/
+│   ├── CustomExceptionHandler.cs     # Global exception handling
+│   ├── EndpointGroupBase.cs          # Base class for endpoints
+│   ├── IEndpointRouteBuilderExtensions.cs
+│   ├── ResultExtensions.cs           # Result to IResult conversion
+│   └── WebApplicationExtensions.cs   # App configuration
+├── Middleware/
+│   └── IpBlockingMiddleware.cs       # IP blacklist middleware
+├── Services/
+│   ├── CurrentUser.cs                # Current user context
+│   └── HttpContextInfo.cs            # HTTP context information
+├── Pages/                            # Razor Pages (if needed)
+│   ├── Error.cshtml
+│   └── Shared/
+├── wwwroot/                          # Static files
+│   └── api/
+├── appsettings.json                  # Configuration
+├── appsettings.Development.json
+├── DependencyInjection.cs            # Web service registration
+├── Program.cs                        # Application entry point
+└── Web.csproj
+```
+
+### Key Files
+
+<Tabs>
+  <Tab title="Program.cs">
+    Application entry point and configuration:
+    
+    ```csharp
+    // src/Web/Program.cs (simplified)
+    var builder = WebApplication.CreateBuilder(args);
+
+    // Add services from each layer
+    builder.Services.AddApplicationServices();
+    builder.Services.AddInfrastructureServices(builder.Configuration);
+    builder.Services.AddWebServices();
+
+    var app = builder.Build();
+
+    // Initialize database in development
+    if (app.Environment.IsDevelopment())
+    {
+        await app.InitialiseDatabaseAsync();
+    }
+
+    // Configure HTTP pipeline
+    app.UseHttpsRedirection();
+    app.UseMiddleware<IpBlockingMiddleware>();  // Custom middleware
+    app.UseAuthentication();
+    app.UseAuthorization();
+    app.UseSwaggerUi3();
+    app.MapEndpoints();                          // Register all endpoints
+
+    app.Run();
+    ```
+    
+    **Location**: `src/Web/Program.cs:36-105`
+  </Tab>
+  
+  <Tab title="Permissions.cs Endpoint">
+    Minimal API endpoint group:
+    
+    ```csharp
+    // src/Web/Endpoints/Permissions.cs
+    public class Permissions : EndpointGroupBase
+    {
+        public override void Map(WebApplication app)
+        {
+            var group = app.MapGroup(this)
+                .WithName("Permissions")
+                .WithOpenApi()
+                .RequireAuthorization("RequireAdministrator");
+
+            group.MapGet("/", GetPermissions)
+                .WithName("GetPermissions")
+                .Produces<List<PermissionDto>>(StatusCodes.Status200OK);
+
+            group.MapPost("/", CreatePermission)
+                .WithName("CreatePermission")
+                .Produces<int>(StatusCodes.Status201Created);
+            
+            // ... more endpoints
+        }
+
+        private static async Task<IResult> GetPermissions(
+            IMediator mediator, 
+            [FromQuery] bool activeOnly = false)
+        {
+            var permissions = await mediator.Send(
+                new GetPermissionsQuery { ActiveOnly = activeOnly });
+            return Results.Ok(permissions);
+        }
+        
+        // ... more handlers
+    }
+    ```
+    
+    **Location**: `src/Web/Endpoints/Permissions.cs:16-115`
+  </Tab>
+  
+  <Tab title="IpBlockingMiddleware.cs">
+    Custom middleware for IP blocking:
+    
+    ```csharp
+    // src/Web/Middleware/IpBlockingMiddleware.cs
+    public class IpBlockingMiddleware
+    {
+        private readonly RequestDelegate _next;
+
+        public IpBlockingMiddleware(RequestDelegate next)
+        {
+            _next = next;
+        }
+
+        public async Task InvokeAsync(
+            HttpContext context, 
+            IIpBlackListService ipBlackListService)
+        {
+            var ipAddress = context.Connection.RemoteIpAddress?.ToString();
+            
+            if (ipAddress != null)
+            {
+                var isBlocked = await ipBlackListService.IsIpBlockedAsync(ipAddress);
+                if (isBlocked)
+                {
+                    context.Response.StatusCode = 403;
+                    return;
+                }
+            }
+
+            await _next(context);
+        }
+    }
+    ```
+    
+    **Location**: `src/Web/Middleware/IpBlockingMiddleware.cs`
+  </Tab>
+</Tabs>
+
+## Tests
+
+Comprehensive test coverage across all layers:
+
+```
+tests/
+├── Domain.UnitTests/
+│   ├── Common/
+│   └── Entities/
+├── Application.UnitTests/
+│   ├── Common/
+│   │   └── Behaviours/          # Test pipeline behaviors
+│   ├── Permissions/
+│   │   ├── Commands/
+│   │   └── Queries/
+│   └── Roles/
+├── Application.FunctionalTests/
+│   ├── IEndpointRouteBuilderExtensions/
+│   └── Testing.cs               # Test infrastructure setup
+└── Infrastructure.IntegrationTests/
+    ├── Data/
+    └── Identity/
+```
+
+<Info>
+  Each test project targets a specific layer and test type:
+  - **Unit Tests**: Fast, isolated, no external dependencies
+  - **Integration Tests**: Test with real database
+  - **Functional Tests**: End-to-end API tests
+</Info>
+
+## Configuration Files
+
+### Root Level
+
+<Tabs>
+  <Tab title="SAPFIAI.sln">
+    Solution file organizing all projects
+    
+    **Location**: `SAPFIAI.sln`
+  </Tab>
+  
+  <Tab title="Directory.Build.props">
+    Shared MSBuild properties for all projects
+    
+    **Location**: `Directory.Build.props`
+  </Tab>
+  
+  <Tab title="Directory.Packages.props">
+    Central Package Management (CPM) for NuGet packages
+    
+    **Location**: `Directory.Packages.props`
+  </Tab>
+  
+  <Tab title=".editorconfig">
+    Code style and formatting rules
+    
+    **Location**: `.editorconfig`
+  </Tab>
+</Tabs>
+
+## Navigation Tips
+
+<Steps>
+  <Step title="Finding a Feature">
+    To find code for a feature like "Create Permission":
+    1. Go to `src/Application/Permissions/`
+    2. Look in `Commands/CreatePermission/`
+    3. Find the Command, Handler, and Validator
+  </Step>
+  
+  <Step title="Finding an Entity">
+    Domain entities are in:
+    - `src/Domain/Entities/`
+    
+    Entity configurations are in:
+    - `src/Infrastructure/Data/Configurations/`
+  </Step>
+  
+  <Step title="Finding an API Endpoint">
+    API endpoints are in:
+    - `src/Web/Endpoints/`
+    
+    Each feature has its own endpoint file (e.g., `Permissions.cs`)
+  </Step>
+  
+  <Step title="Finding Service Implementations">
+    Service implementations are in:
+    - `src/Infrastructure/Services/`
+    
+    Service interfaces are in:
+    - `src/Application/Common/Interfaces/`
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="CQRS Pattern" icon="code-branch" href="/architecture/cqrs-pattern">
+    Learn how Commands and Queries work
+  </Card>
+  <Card title="Creating Use Cases" icon="plus" href="/guides/creating-use-cases">
+    Add new features to the application
+  </Card>
+  <Card title="Domain Entities" icon="cube" href="/architecture/clean-architecture#domain-layer">
+    Understanding domain models
+  </Card>
+  <Card title="Testing" icon="flask" href="/development/testing">
+    Writing tests for each layer
+  </Card>
+</CardGroup>

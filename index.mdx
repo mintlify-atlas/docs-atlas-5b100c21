@@ -1,97 +1,253 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "SAPFIAI Documentation"
+description: "Enterprise-grade ASP.NET Core 8.0 Clean Architecture API with advanced security, CQRS, and role-based access control"
+mode: "custom"
 ---
 
-## Setting up
+<div className="relative overflow-hidden bg-gradient-to-br from-[#512BD4] via-[#3A1F9D] to-[#1a0f52] dark:from-[#512BD4] dark:via-[#3A1F9D] dark:to-[#1a0f52] py-20">
+  <div className="max-w-7xl mx-auto px-6 lg:px-8">
+    <div className="grid lg:grid-cols-12 gap-8 items-center">
+      <div className="lg:col-span-7">
+        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6">
+          SAPFIAI API Documentation
+        </h1>
+        <p className="text-lg sm:text-xl text-white/90 mb-8 max-w-2xl">
+          Build secure, scalable enterprise applications with Clean Architecture, CQRS, and advanced security features powered by ASP.NET Core 8.0
+        </p>
+        <div className="flex flex-wrap gap-4">
+          <a 
+            href="/quickstart" 
+            className="inline-flex items-center justify-center px-6 py-3 rounded-lg bg-white text-[#512BD4] font-semibold hover:bg-gray-100 transition-colors no-underline"
+          >
+            Get Started
+          </a>
+          <a 
+            href="/api/authentication/register" 
+            className="inline-flex items-center justify-center px-6 py-3 rounded-lg border-2 border-white/30 bg-white/10 text-white font-semibold hover:bg-white/20 transition-colors no-underline"
+          >
+            Explore API Reference
+          </a>
+        </div>
+      </div>
+      <div className="lg:col-span-5 hidden lg:block">
+        <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6">
+          ```csharp Program.cs lines icon="file-code"
+          var builder = WebApplication.CreateBuilder(args);
 
-Get your documentation site up and running in minutes.
+          builder.Services.AddApplicationServices();
+          builder.Services.AddInfrastructureServices(builder.Configuration);
+          builder.Services.AddWebServices();
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+          var app = builder.Build();
+          
+          app.UseAuthentication();
+          app.UseAuthorization();
+          app.MapEndpoints();
+          
+          app.Run();
+          ```
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
-## Make it yours
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Quick Start</h2>
+  <p className="text-lg text-gray-600 dark:text-gray-400 mb-8">
+    Get your SAPFIAI API up and running in minutes
+  </p>
 
-Design a docs site that looks great and empowers your users.
+  <Steps>
+    <Step title="Clone and restore dependencies">
+      Clone the repository and restore all NuGet packages
+      ```bash
+      git clone https://github.com/JonathanArroyaveGonzalez/SistemaFinancieroUcaldas_Backend.git
+      cd SAPFIAI
+      dotnet restore
+      ```
+    </Step>
 
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
-  </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
-  </Card>
+    <Step title="Configure database connection">
+      Update your connection string in `src/Web/appsettings.json`
+      ```json appsettings.json
+      {
+        "ConnectionStrings": {
+          "DefaultConnection": "Server=(localdb)\\mssqllocaldb;Database=SAPFIAIDb;Trusted_Connection=true;MultipleActiveResultSets=true"
+        }
+      }
+      ```
+    </Step>
+
+    <Step title="Apply database migrations">
+      Run Entity Framework migrations to set up your database
+      ```bash
+      dotnet ef database update --project src/Infrastructure --startup-project src/Web
+      ```
+    </Step>
+
+    <Step title="Run the API">
+      Start the development server and access the Swagger UI
+      ```bash
+      dotnet run --project src/Web
+      ```
+      
+      <Note>
+        The API will be available at `https://localhost:5001/api` with interactive Swagger documentation
+      </Note>
+    </Step>
+  </Steps>
+</div>
+
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Explore by Topic</h2>
+  <p className="text-lg text-gray-600 dark:text-gray-400 mb-8">
+    Deep dive into SAPFIAI's core features and architecture
+  </p>
+
+  <CardGroup cols={3}>
     <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
-  </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
-  </Card>
-</Columns>
+      title="Clean Architecture"
+      icon="layer-group"
+      href="/architecture/clean-architecture"
+    >
+      Understand the layered architecture separating Domain, Application, Infrastructure, and Web concerns
+    </Card>
+    <Card
+      title="CQRS Pattern"
+      icon="arrows-split-up-and-left"
+      href="/architecture/cqrs-pattern"
+    >
+      Learn how commands and queries are separated using MediatR for scalable operations
+    </Card>
+    <Card
+      title="Authentication"
+      icon="shield-halved"
+      href="/concepts/authentication"
+    >
+      Implement JWT authentication with refresh tokens and two-factor authentication
+    </Card>
+    <Card
+      title="Authorization"
+      icon="lock"
+      href="/concepts/authorization"
+    >
+      Build granular role-based access control with custom permissions
+    </Card>
+    <Card
+      title="Security Features"
+      icon="shield-check"
+      href="/security/jwt-authentication"
+    >
+      Explore IP blocking, audit logs, and advanced security mechanisms
+    </Card>
+    <Card
+      title="Testing"
+      icon="flask-vial"
+      href="/development/testing"
+    >
+      Write unit, functional, and integration tests with NUnit and Moq
+    </Card>
+  </CardGroup>
+</div>
 
-## Create beautiful pages
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">API Reference</h2>
+  <p className="text-lg text-gray-600 dark:text-gray-400 mb-8">
+    Complete documentation for all API endpoints
+  </p>
 
-Everything you need to create world-class documentation.
+  <CardGroup cols={2}>
+    <Card
+      title="Authentication Endpoints"
+      icon="key"
+      href="/api/authentication/register"
+    >
+      Register, login, logout, refresh tokens, and two-factor authentication
+    </Card>
+    <Card
+      title="Roles & Permissions"
+      icon="users-gear"
+      href="/api/roles/overview"
+    >
+      Create and manage roles, assign permissions, and control access
+    </Card>
+    <Card
+      title="Security Management"
+      icon="shield"
+      href="/api/security/audit-logs"
+    >
+      Monitor audit logs, manage IP blacklists, and health checks
+    </Card>
+    <Card
+      title="Health Checks"
+      icon="heart-pulse"
+      href="/api/security/health-checks"
+    >
+      Monitor API health and database connectivity
+    </Card>
+  </CardGroup>
+</div>
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Key Features</h2>
+  <p className="text-lg text-gray-600 dark:text-gray-400 mb-8">
+    What makes SAPFIAI the ideal foundation for enterprise APIs
+  </p>
 
-## Need inspiration?
+  <div className="grid md:grid-cols-2 gap-6">
+    <div className="bg-gray-50 dark:bg-[#1a1d27] border border-gray-200 dark:border-[#27272a] rounded-xl p-6">
+      <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">Clean Architecture</h3>
+      <p className="text-gray-600 dark:text-gray-400">
+        Clear separation of concerns with Domain, Application, Infrastructure, and Web layers for maintainable and testable code
+      </p>
+    </div>
+    <div className="bg-gray-50 dark:bg-[#1a1d27] border border-gray-200 dark:border-[#27272a] rounded-xl p-6">
+      <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">CQRS with MediatR</h3>
+      <p className="text-gray-600 dark:text-gray-400">
+        Command Query Responsibility Segregation pattern for scalable operations with clean handler separation
+      </p>
+    </div>
+    <div className="bg-gray-50 dark:bg-[#1a1d27] border border-gray-200 dark:border-[#27272a] rounded-xl p-6">
+      <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">Advanced Security</h3>
+      <p className="text-gray-600 dark:text-gray-400">
+        JWT authentication, refresh tokens, 2FA, IP blocking, login attempt tracking, and comprehensive audit logging
+      </p>
+    </div>
+    <div className="bg-gray-50 dark:bg-[#1a1d27] border border-gray-200 dark:border-[#27272a] rounded-xl p-6">
+      <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">Entity Framework Core 8</h3>
+      <p className="text-gray-600 dark:text-gray-400">
+        Modern ORM with SQL Server support, migrations, and optimized query patterns
+      </p>
+    </div>
+    <div className="bg-gray-50 dark:bg-[#1a1d27] border border-gray-200 dark:border-[#27272a] rounded-xl p-6">
+      <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">FluentValidation</h3>
+      <p className="text-gray-600 dark:text-gray-400">
+        Centralized validation logic with clear, reusable validation rules for all commands and queries
+      </p>
+    </div>
+    <div className="bg-gray-50 dark:bg-[#1a1d27] border border-gray-200 dark:border-[#27272a] rounded-xl p-6">
+      <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">Comprehensive Testing</h3>
+      <p className="text-gray-600 dark:text-gray-400">
+        Unit, functional, and integration tests with NUnit, FluentAssertions, and Moq for reliable code
+      </p>
+    </div>
+  </div>
+</div>
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="bg-gradient-to-br from-[#512BD4] to-[#3A1F9D] dark:from-[#512BD4] dark:to-[#3A1F9D] rounded-2xl p-8 md:p-12">
+    <div className="max-w-3xl">
+      <h2 className="text-3xl font-bold text-white mb-4">Ready to get started?</h2>
+      <p className="text-lg text-white/90 mb-6">
+        Follow our quickstart guide to build your first secure API endpoint with SAPFIAI in minutes
+      </p>
+      <a 
+        href="/quickstart" 
+        className="inline-flex items-center justify-center px-6 py-3 rounded-lg bg-white text-[#512BD4] font-semibold hover:bg-gray-100 transition-colors no-underline"
+      >
+        Start Building Now
+      </a>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,304 @@
+---
+title: IP Management
+description: API endpoints for managing IP blacklist and account security
+---
+
+## Get Blocked IPs
+
+Retrieves a list of blocked IP addresses. Requires `CanPurge` authorization.
+
+```http
+GET /security/blocked-ips
+```
+
+### Query Parameters
+
+<ParamField query="activeOnly" type="boolean" default="true">
+  Filter to show only active blocks (excludes expired blocks)
+</ParamField>
+
+### Authorization
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with `CanPurge` permission
+</ParamField>
+
+### Response
+
+Returns an array of blocked IP entries.
+
+<ResponseField name="id" type="integer">
+  Unique identifier for the blacklist entry
+</ResponseField>
+
+<ResponseField name="ipAddress" type="string">
+  The blocked IP address
+</ResponseField>
+
+<ResponseField name="reason" type="string">
+  Human-readable reason for the block
+</ResponseField>
+
+<ResponseField name="isActive" type="boolean">
+  Whether the block is currently active
+</ResponseField>
+
+<ResponseField name="expiryDate" type="datetime">
+  When the block will expire (null for permanent blocks)
+</ResponseField>
+
+<ResponseField name="createdAt" type="datetime">
+  When the block was created
+</ResponseField>
+
+### Example Request
+
+```bash
+curl -X GET "https://api.example.com/security/blocked-ips?activeOnly=true" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+### Example Response
+
+```json
+[
+  {
+    "id": 1,
+    "ipAddress": "192.168.1.50",
+    "reason": "Too many failed login attempts",
+    "isActive": true,
+    "expiryDate": "2024-03-16T10:30:00Z",
+    "createdAt": "2024-03-15T10:30:00Z"
+  },
+  {
+    "id": 2,
+    "ipAddress": "10.0.0.15",
+    "reason": "Suspicious activity detected",
+    "isActive": true,
+    "expiryDate": null,
+    "createdAt": "2024-03-14T15:20:00Z"
+  }
+]
+```
+
+## Block IP Address
+
+Adds an IP address to the blacklist. Requires `CanPurge` authorization.
+
+```http
+POST /security/block-ip
+```
+
+### Authorization
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with `CanPurge` permission
+</ParamField>
+
+### Request Body
+
+<ParamField body="ipAddress" type="string" required>
+  The IP address to block
+</ParamField>
+
+<ParamField body="reason" type="string" required>
+  Human-readable reason for blocking the IP
+</ParamField>
+
+<ParamField body="blackListReason" type="enum" default="ManualBlock">
+  Category of the block reason:
+  - `ManualBlock` - Manually blocked by administrator
+  - `TooManyAttempts` - Automatically blocked due to failed attempts
+  - `SuspiciousActivity` - Blocked due to suspicious behavior
+  - `ReportedAbuse` - Blocked due to abuse reports
+</ParamField>
+
+<ParamField body="expiryDate" type="datetime" optional>
+  When the block should expire (null for permanent block)
+</ParamField>
+
+<ParamField body="notes" type="string" optional>
+  Additional notes about the block
+</ParamField>
+
+### Response
+
+Returns a result object indicating success or failure.
+
+<ResponseField name="succeeded" type="boolean">
+  Whether the operation succeeded
+</ResponseField>
+
+<ResponseField name="errors" type="array">
+  Array of error messages if the operation failed
+</ResponseField>
+
+### Example Request
+
+```bash
+curl -X POST "https://api.example.com/security/block-ip" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "ipAddress": "192.168.1.75",
+    "reason": "Multiple failed authentication attempts",
+    "blackListReason": "TooManyAttempts",
+    "expiryDate": "2024-03-20T00:00:00Z",
+    "notes": "Temporary block for 5 days"
+  }'
+```
+
+### Example Response
+
+```json
+{
+  "succeeded": true,
+  "errors": []
+}
+```
+
+## Unblock IP Address
+
+Removes an IP address from the blacklist. Requires `CanPurge` authorization.
+
+```http
+POST /security/unblock-ip
+```
+
+### Authorization
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with `CanPurge` permission
+</ParamField>
+
+### Request Body
+
+<ParamField body="ipAddress" type="string" required>
+  The IP address to unblock
+</ParamField>
+
+### Response
+
+Returns a result object indicating success or failure.
+
+<ResponseField name="succeeded" type="boolean">
+  Whether the operation succeeded
+</ResponseField>
+
+<ResponseField name="errors" type="array">
+  Array of error messages if the operation failed
+</ResponseField>
+
+### Example Request
+
+```bash
+curl -X POST "https://api.example.com/security/unblock-ip" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "ipAddress": "192.168.1.75"
+  }'
+```
+
+### Example Response
+
+```json
+{
+  "succeeded": true,
+  "errors": []
+}
+```
+
+## Unlock User Account
+
+Unlocks a user account that has been locked due to security reasons. Requires `CanPurge` authorization.
+
+```http
+POST /security/unlock-account
+```
+
+### Authorization
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with `CanPurge` permission
+</ParamField>
+
+### Request Body
+
+<ParamField body="userId" type="string" required>
+  The unique identifier of the user account to unlock
+</ParamField>
+
+### Response
+
+Returns a result object indicating success or failure.
+
+<ResponseField name="succeeded" type="boolean">
+  Whether the operation succeeded
+</ResponseField>
+
+<ResponseField name="errors" type="array">
+  Array of error messages if the operation failed
+</ResponseField>
+
+### Example Request
+
+```bash
+curl -X POST "https://api.example.com/security/unlock-account" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": "user123"
+  }'
+```
+
+### Example Response
+
+```json
+{
+  "succeeded": true,
+  "errors": []
+}
+```
+
+## Blacklist Reasons
+
+The system supports the following blacklist reason categories:
+
+- **ManualBlock** - IP manually blocked by an administrator
+- **TooManyAttempts** - Automatically blocked after exceeding failed login attempts
+- **SuspiciousActivity** - Blocked due to suspicious or anomalous behavior
+- **ReportedAbuse** - Blocked following abuse reports or security incidents
+
+## Error Responses
+
+<ResponseExample>
+
+```json 401 Unauthorized
+{
+  "type": "https://tools.ietf.org/html/rfc7231#section-6.5.1",
+  "title": "Unauthorized",
+  "status": 401,
+  "detail": "Authentication required"
+}
+```
+
+```json 403 Forbidden
+{
+  "type": "https://tools.ietf.org/html/rfc7231#section-6.5.3",
+  "title": "Forbidden",
+  "status": 403,
+  "detail": "CanPurge permission required"
+}
+```
+
+```json 400 Bad Request
+{
+  "succeeded": false,
+  "errors": [
+    "Invalid IP address format"
+  ]
+}
+```
+
+</ResponseExample>

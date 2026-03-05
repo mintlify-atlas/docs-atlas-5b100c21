@@ -1,0 +1,211 @@
+---
+title: Health Checks
+description: API endpoint for monitoring system health and availability
+---
+
+## System Health Check
+
+Retrieves the current health status of the API and its dependencies. This endpoint is typically used by monitoring systems, load balancers, and orchestration platforms.
+
+```http
+GET /health
+```
+
+### Authorization
+
+No authentication required. This endpoint is public to allow external monitoring.
+
+### Response
+
+The health check endpoint returns different responses based on the system status:
+
+#### Healthy Status
+
+When all systems are operational:
+
+- **Status Code**: `200 OK`
+- **Response**: `Healthy`
+
+#### Degraded Status
+
+When some non-critical systems are experiencing issues:
+
+- **Status Code**: `200 OK`
+- **Response**: Details about degraded services
+
+#### Unhealthy Status
+
+When critical systems are down:
+
+- **Status Code**: `503 Service Unavailable`
+- **Response**: Details about failing health checks
+
+### Health Checks Performed
+
+The endpoint validates:
+
+1. **Database Connectivity** - Verifies connection to the application database
+2. **Application Services** - Ensures core application services are responsive
+
+### Example Request
+
+```bash
+curl -X GET "https://api.example.com/health"
+```
+
+### Example Responses
+
+<ResponseExample>
+
+```text 200 Healthy
+Healthy
+```
+
+```json 200 Degraded
+{
+  "status": "Degraded",
+  "checks": {
+    "database": "Healthy",
+    "cache": "Unhealthy"
+  },
+  "timestamp": "2024-03-15T10:30:00Z"
+}
+```
+
+```json 503 Unhealthy
+{
+  "status": "Unhealthy",
+  "checks": {
+    "database": "Unhealthy",
+    "error": "Connection timeout"
+  },
+  "timestamp": "2024-03-15T10:30:00Z"
+}
+```
+
+</ResponseExample>
+
+## Usage in Production
+
+### Load Balancer Configuration
+
+Configure your load balancer to perform health checks:
+
+```yaml
+health_check:
+  endpoint: /health
+  interval: 30s
+  timeout: 5s
+  healthy_threshold: 2
+  unhealthy_threshold: 3
+```
+
+### Kubernetes Liveness Probe
+
+Example Kubernetes configuration:
+
+```yaml
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 80
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+```
+
+### Readiness Probe
+
+Example readiness probe for Kubernetes:
+
+```yaml
+readinessProbe:
+  httpGet:
+    path: /health
+    port: 80
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 2
+```
+
+### Monitoring Integration
+
+Integrate with monitoring tools:
+
+```bash
+# Prometheus configuration
+- job_name: 'api-health'
+  metrics_path: '/health'
+  scrape_interval: 30s
+  static_configs:
+    - targets: ['api.example.com']
+```
+
+### Docker Health Check
+
+Example Docker health check:
+
+```dockerfile
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD curl -f http://localhost/health || exit 1
+```
+
+## Best Practices
+
+### Timeout Configuration
+
+- Set appropriate timeouts (3-5 seconds recommended)
+- Ensure health checks don't overwhelm the system
+- Use exponential backoff for retries
+
+### Monitoring Frequency
+
+- Production: Every 30-60 seconds
+- Development: Every 60-120 seconds
+- Don't check more frequently than necessary
+
+### Response Handling
+
+- **200 OK**: System is healthy, route traffic normally
+- **503 Unavailable**: System is unhealthy, stop routing traffic
+- **Timeout**: Treat as unhealthy after threshold
+
+### Database Health
+
+The health check verifies database connectivity by:
+
+1. Testing connection pool availability
+2. Executing a lightweight query
+3. Validating response time is within acceptable limits
+
+### Logging
+
+Health check failures are logged but don't trigger audit logs to avoid:
+
+- Excessive log volume
+- Performance impact during outages
+- Filling audit tables with monitoring data
+
+## Troubleshooting
+
+### Common Issues
+
+**503 Service Unavailable**
+- Check database connection string
+- Verify network connectivity
+- Review application logs
+- Check resource availability (CPU, memory)
+
+**Timeout Errors**
+- Database query performance issues
+- Network latency
+- Resource exhaustion
+- Connection pool saturation
+
+**Intermittent Failures**
+- Database connection pool issues
+- Network instability
+- Resource contention
+- Insufficient health check thresholds

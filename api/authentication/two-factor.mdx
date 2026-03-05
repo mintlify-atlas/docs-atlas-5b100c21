@@ -1,0 +1,322 @@
+---
+title: Two-Factor Authentication
+---
+
+Manage two-factor authentication (2FA) for user accounts.
+
+## Verify Two-Factor Code
+
+<api>POST /authentication/verify-2fa</api>
+
+Verify a two-factor authentication code after login.
+
+### Authentication
+
+This endpoint does not require authentication, but requires a temporary token from the login response.
+
+### Request Body
+
+<ParamField body="code" type="string" required>
+  The 6-digit two-factor authentication code. Must contain only numbers.
+</ParamField>
+
+<ParamField body="token" type="string" required>
+  Temporary token received from the login response when `requires2FA` is true.
+</ParamField>
+
+### Response
+
+<ResponseField name="success" type="boolean">
+  Indicates whether the 2FA verification was successful.
+</ResponseField>
+
+<ResponseField name="token" type="string">
+  JWT access token for authenticating subsequent requests (only provided on successful verification).
+</ResponseField>
+
+<ResponseField name="refreshToken" type="string">
+  Refresh token for obtaining new access tokens.
+</ResponseField>
+
+<ResponseField name="refreshTokenExpiry" type="string">
+  Expiration date and time of the refresh token (ISO 8601 format).
+</ResponseField>
+
+<ResponseField name="user" type="object">
+  User information object.
+  
+  <Expandable title="user properties">
+    <ResponseField name="id" type="string">
+      User's unique identifier.
+    </ResponseField>
+    
+    <ResponseField name="email" type="string">
+      User's email address.
+    </ResponseField>
+    
+    <ResponseField name="userName" type="string">
+      User's username.
+    </ResponseField>
+    
+    <ResponseField name="phoneNumber" type="string">
+      User's phone number.
+    </ResponseField>
+    
+    <ResponseField name="twoFactorEnabled" type="boolean">
+      Indicates if two-factor authentication is enabled.
+    </ResponseField>
+    
+    <ResponseField name="lastLoginDate" type="string">
+      Date and time of last login (ISO 8601 format).
+    </ResponseField>
+    
+    <ResponseField name="lastLoginIp" type="string">
+      IP address of last login.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  A message describing the result of the operation.
+</ResponseField>
+
+<ResponseField name="errors" type="string[]">
+  Array of error messages if verification failed.
+</ResponseField>
+
+### Error Responses
+
+<ResponseExample>
+```json 400 Bad Request - Invalid Code
+{
+  "success": false,
+  "token": null,
+  "refreshToken": null,
+  "user": null,
+  "message": "2FA verification failed",
+  "errors": [
+    "Invalid two-factor authentication code"
+  ]
+}
+```
+
+```json 400 Bad Request - Validation Error
+{
+  "success": false,
+  "token": null,
+  "refreshToken": null,
+  "user": null,
+  "message": "Validation failed",
+  "errors": [
+    "El código debe tener 6 dígitos"
+  ]
+}
+```
+</ResponseExample>
+
+<RequestExample>
+```bash cURL - Verify 2FA
+curl -X POST https://api.sapfiai.com/authentication/verify-2fa \
+  -H "Content-Type: application/json" \
+  -d '{
+    "code": "123456",
+    "token": "temp-2fa-token-xyz"
+  }'
+```
+
+```csharp C# Client - Verify 2FA
+using var httpClient = new HttpClient();
+var request = new ValidateTwoFactorCommand
+{
+    Code = "123456",
+    Token = temporaryToken
+};
+
+var response = await httpClient.PostAsJsonAsync(
+    "https://api.sapfiai.com/authentication/verify-2fa",
+    request
+);
+
+var result = await response.Content.ReadFromJsonAsync<ValidateTwoFactorResponse>();
+
+if (result.Success)
+{
+    Console.WriteLine("2FA verification successful");
+    // Store the tokens securely
+    var accessToken = result.Token;
+    var refreshToken = result.RefreshToken;
+}
+else
+{
+    Console.WriteLine($"2FA verification failed: {string.Join(", ", result.Errors)}");
+}
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Success - Verify 2FA
+{
+  "success": true,
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refreshToken": "8f7d6e5c4b3a2918e7f6d5c4b3a29180",
+  "refreshTokenExpiry": "2026-04-05T10:30:00Z",
+  "user": {
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "email": "user@example.com",
+    "userName": "johndoe",
+    "phoneNumber": "+1234567890",
+    "twoFactorEnabled": true,
+    "lastLoginDate": "2026-03-05T10:30:00Z",
+    "lastLoginIp": "192.168.1.1"
+  },
+  "message": "2FA verification successful",
+  "errors": null
+}
+```
+</ResponseExample>
+
+---
+
+## Enable Two-Factor Authentication
+
+<api>POST /authentication/enable-2fa</api>
+
+Enable or disable two-factor authentication for the authenticated user.
+
+### Authentication
+
+**Required**: This endpoint requires authentication via Bearer token.
+
+```bash
+Authorization: Bearer {token}
+```
+
+### Request Body
+
+<ParamField body="email" type="string" required>
+  User's email address for verification.
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  User's password for verification. Must be at least 6 characters.
+</ParamField>
+
+<ParamField body="enable" type="boolean" default="true">
+  Set to `true` to enable 2FA, or `false` to disable it.
+</ParamField>
+
+### Response
+
+<ResponseField name="isSuccess" type="boolean">
+  Indicates whether the 2FA setting change was successful.
+</ResponseField>
+
+<ResponseField name="succeeded" type="boolean">
+  Alias for isSuccess. Indicates whether the operation succeeded.
+</ResponseField>
+
+<ResponseField name="error" type="object">
+  Error information if the operation failed.
+  
+  <Expandable title="error properties">
+    <ResponseField name="code" type="string">
+      Error code identifier.
+    </ResponseField>
+    
+    <ResponseField name="description" type="string">
+      Human-readable error description.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="errors" type="object[]">
+  Array of error objects if the operation failed.
+</ResponseField>
+
+### Error Responses
+
+<ResponseExample>
+```json 401 Unauthorized
+{
+  "type": "https://tools.ietf.org/html/rfc7235#section-3.1",
+  "title": "Unauthorized",
+  "status": 401,
+  "detail": "Authorization token is missing or invalid"
+}
+```
+
+```json 400 Bad Request - Invalid Password
+{
+  "isSuccess": false,
+  "succeeded": false,
+  "error": {
+    "code": "TwoFactor.InvalidCredentials",
+    "description": "Invalid email or password"
+  },
+  "errors": [
+    {
+      "code": "TwoFactor.InvalidCredentials",
+      "description": "Invalid email or password"
+    }
+  ]
+}
+```
+</ResponseExample>
+
+<RequestExample>
+```bash cURL - Enable 2FA
+curl -X POST https://api.sapfiai.com/authentication/enable-2fa \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "SecureP@ssw0rd",
+    "enable": true
+  }'
+```
+
+```csharp C# Client - Enable 2FA
+using var httpClient = new HttpClient();
+
+// Add the authorization header with the access token
+httpClient.DefaultRequestHeaders.Authorization = 
+    new AuthenticationHeaderValue("Bearer", accessToken);
+
+var request = new EnableTwoFactorCommand
+{
+    Email = "user@example.com",
+    Password = "SecureP@ssw0rd",
+    Enable = true
+};
+
+var response = await httpClient.PostAsJsonAsync(
+    "https://api.sapfiai.com/authentication/enable-2fa",
+    request
+);
+
+var result = await response.Content.ReadFromJsonAsync<Result>();
+
+if (result.Succeeded)
+{
+    Console.WriteLine("Two-factor authentication enabled successfully");
+}
+else
+{
+    Console.WriteLine($"Failed to enable 2FA: {result.Error.Description}");
+}
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Success - Enable 2FA
+{
+  "isSuccess": true,
+  "succeeded": true,
+  "error": {
+    "code": "",
+    "description": ""
+  },
+  "errors": []
+}
+```
+</ResponseExample>

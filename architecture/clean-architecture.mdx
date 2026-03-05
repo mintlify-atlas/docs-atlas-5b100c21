@@ -1,0 +1,590 @@
+---
+title: Clean Architecture
+description: Understanding Clean Architecture principles and implementation in SAPFIAI
+---
+
+## What is Clean Architecture?
+
+Clean Architecture, introduced by Robert C. Martin (Uncle Bob), is a software design philosophy that emphasizes:
+
+- **Separation of Concerns**: Each layer has a distinct responsibility
+- **Dependency Inversion**: Dependencies point inward toward business logic
+- **Testability**: Business logic can be tested without UI, database, or frameworks
+- **Framework Independence**: Core logic isn't tied to any specific framework
+
+<Frame>
+  <img src="https://blog.cleancoder.com/uncle-bob/images/2012-08-13-the-clean-architecture/CleanArchitecture.jpg" alt="Clean Architecture Diagram" />
+</Frame>
+
+## The Dependency Rule
+
+The fundamental principle of Clean Architecture is the **Dependency Rule**:
+
+<Warning>
+  **Source code dependencies must point only inward**, toward higher-level policies. Nothing in an inner circle can know anything about an outer circle.
+</Warning>
+
+### How SAPFIAI Implements This
+
+```
+Domain Layer (Core)
+   ↑
+   | depends on
+   |
+Application Layer
+   ↑
+   | depends on
+   |
+Infrastructure Layer
+   ↑
+   | depends on
+   |
+Web Layer (Presentation)
+```
+
+## Layer Responsibilities
+
+### Domain Layer (Enterprise Business Rules)
+
+The Domain layer is the heart of the application, containing:
+
+- **Entities**: Core business objects
+- **Value Objects**: Immutable domain concepts
+- **Domain Events**: Business events that occurred
+- **Domain Exceptions**: Business rule violations
+
+<Tabs>
+  <Tab title="Entity Example">
+    ```csharp
+    // src/Domain/Entities/Permission.cs
+    namespace SAPFIAI.Domain.Entities;
+
+    public class Permission : BaseEntity
+    {
+        public string Name { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public string Module { get; set; } = string.Empty;
+        public bool IsActive { get; set; } = true;
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        
+        // Navigation properties
+        public ICollection<RolePermission> RolePermissions { get; set; } 
+            = new List<RolePermission>();
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Base Entity">
+    ```csharp
+    // src/Domain/Common/BaseEntity.cs
+    namespace SAPFIAI.Domain.Common;
+
+    public abstract class BaseEntity
+    {
+        public int Id { get; set; }
+
+        private readonly List<BaseEvent> _domainEvents = new();
+
+        [NotMapped]
+        public IReadOnlyCollection<BaseEvent> DomainEvents 
+            => _domainEvents.AsReadOnly();
+
+        public void AddDomainEvent(BaseEvent domainEvent)
+        {
+            _domainEvents.Add(domainEvent);
+        }
+
+        public void ClearDomainEvents()
+        {
+            _domainEvents.Clear();
+        }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Value Object">
+    ```csharp
+    // src/Domain/ValueObjects/Colour.cs
+    namespace SAPFIAI.Domain.ValueObjects;
+
+    public class Colour : ValueObject
+    {
+        public string Code { get; private set; }
+        
+        public static Colour From(string code)
+        {
+            // Value object creation logic
+            return new Colour { Code = code };
+        }
+        
+        protected override IEnumerable<object> GetEqualityComponents()
+        {
+            yield return Code;
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  The Domain layer has **zero dependencies** on external packages. It's pure C# code representing your business rules.
+</Note>
+
+### Application Layer (Application Business Rules)
+
+The Application layer orchestrates business workflows through:
+
+- **Use Cases**: Commands and Queries (CQRS)
+- **Interfaces**: Abstract contracts for external services
+- **DTOs**: Data Transfer Objects for layer communication
+- **Behaviors**: Cross-cutting concerns (validation, logging)
+- **Exceptions**: Application-specific errors
+
+<Tabs>
+  <Tab title="Interface (Contract)">
+    ```csharp
+    // src/Application/Common/Interfaces/IApplicationDbContext.cs
+    namespace SAPFIAI.Application.Common.Interfaces;
+
+    public interface IApplicationDbContext
+    {
+        DbSet<Permission> Permissions { get; }
+        DbSet<RolePermission> RolePermissions { get; }
+        DbSet<AuditLog> AuditLogs { get; }
+        
+        Task<int> SaveChangesAsync(CancellationToken cancellationToken);
+    }
+    ```
+    
+    <Info>
+      The Application layer defines the interface, but the Infrastructure layer provides the implementation.
+    </Info>
+  </Tab>
+  
+  <Tab title="Command">
+    ```csharp
+    // src/Application/Permissions/Commands/CreatePermission/CreatePermissionCommand.cs
+    namespace SAPFIAI.Application.Permissions.Commands.CreatePermission;
+
+    public record CreatePermissionCommand : IRequest<Result<int>>
+    {
+        public required string Name { get; init; }
+        public string? Description { get; init; }
+        public required string Module { get; init; }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Handler">
+    ```csharp
+    // src/Application/Permissions/Commands/CreatePermission/CreatePermissionCommandHandler.cs
+    public class CreatePermissionCommandHandler 
+        : IRequestHandler<CreatePermissionCommand, Result<int>>
+    {
+        private readonly IApplicationDbContext _context;
+        private readonly ILogger<CreatePermissionCommandHandler> _logger;
+
+        public CreatePermissionCommandHandler(
+            IApplicationDbContext context, 
+            ILogger<CreatePermissionCommandHandler> logger)
+        {
+            _context = context;
+            _logger = logger;
+        }
+
+        public async Task<Result<int>> Handle(
+            CreatePermissionCommand request, 
+            CancellationToken cancellationToken)
+        {
+            _logger.LogInformation("Creating permission: {PermissionName}", request.Name);
+            
+            var exists = await _context.Permissions
+                .AnyAsync(p => p.Name == request.Name, cancellationToken);
+
+            if (exists)
+            {
+                return Result.Failure<int>(
+                    new Error("PermissionExists", "El permiso ya existe"));
+            }
+
+            var permission = new Permission
+            {
+                Name = request.Name,
+                Description = request.Description,
+                Module = request.Module,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.Permissions.Add(permission);
+            await _context.SaveChangesAsync(cancellationToken);
+
+            return Result.Success(permission.Id);
+        }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Validator">
+    ```csharp
+    // src/Application/Permissions/Commands/CreatePermission/CreatePermissionCommandValidator.cs
+    public class CreatePermissionCommandValidator 
+        : AbstractValidator<CreatePermissionCommand>
+    {
+        public CreatePermissionCommandValidator()
+        {
+            RuleFor(x => x.Name)
+                .NotEmpty().WithMessage("El nombre del permiso es requerido")
+                .MaximumLength(100)
+                .Matches("^[a-z0-9._-]+$")
+                .WithMessage("Use formato: modulo.accion (ej: users.create)");
+
+            RuleFor(x => x.Module)
+                .NotEmpty().WithMessage("El módulo es requerido")
+                .MaximumLength(50);
+
+            RuleFor(x => x.Description)
+                .MaximumLength(500)
+                .When(x => !string.IsNullOrEmpty(x.Description));
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Infrastructure Layer (Frameworks & Drivers)
+
+The Infrastructure layer provides concrete implementations:
+
+- **DbContext**: Entity Framework database access
+- **Repositories**: Data access patterns
+- **Services**: External API integrations (email, SMS)
+- **File Storage**: Cloud or local file systems
+- **Identity**: Authentication and authorization
+
+<Tabs>
+  <Tab title="DbContext Implementation">
+    ```csharp
+    // src/Infrastructure/Data/ApplicationDbContext.cs
+    namespace SAPFIAI.Infrastructure.Data;
+
+    public class ApplicationDbContext 
+        : IdentityDbContext<ApplicationUser>, IApplicationDbContext
+    {
+        public ApplicationDbContext(
+            DbContextOptions<ApplicationDbContext> options) 
+            : base(options) { }
+
+        public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+        public DbSet<Permission> Permissions => Set<Permission>();
+        public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
+        public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+
+        protected override void OnModelCreating(ModelBuilder builder)
+        {
+            builder.ApplyConfigurationsFromAssembly(
+                Assembly.GetExecutingAssembly());
+            base.OnModelCreating(builder);
+        }
+    }
+    ```
+    
+    <Info>
+      `ApplicationDbContext` implements `IApplicationDbContext` from the Application layer.
+    </Info>
+  </Tab>
+  
+  <Tab title="Entity Configuration">
+    ```csharp
+    // src/Infrastructure/Data/Configurations/PermissionConfiguration.cs
+    public class PermissionConfiguration : IEntityTypeConfiguration<Permission>
+    {
+        public void Configure(EntityTypeBuilder<Permission> builder)
+        {
+            builder.Property(p => p.Name)
+                .HasMaxLength(100)
+                .IsRequired();
+
+            builder.HasIndex(p => p.Name)
+                .IsUnique();
+
+            builder.Property(p => p.Module)
+                .HasMaxLength(50)
+                .IsRequired();
+
+            builder.Property(p => p.Description)
+                .HasMaxLength(500);
+        }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Service Registration">
+    ```csharp
+    // src/Infrastructure/DependencyInjection.cs
+    public static class DependencyInjection
+    {
+        public static IServiceCollection AddInfrastructureServices(
+            this IServiceCollection services, 
+            IConfiguration configuration)
+        {
+            // Database
+            services.AddDbContext<ApplicationDbContext>(options =>
+                options.UseSqlServer(
+                    configuration.GetConnectionString("DefaultConnection")));
+            
+            services.AddScoped<IApplicationDbContext>(
+                provider => provider.GetRequiredService<ApplicationDbContext>());
+
+            // Identity
+            services.AddIdentityCore<ApplicationUser>()
+                .AddRoles<IdentityRole>()
+                .AddEntityFrameworkStores<ApplicationDbContext>();
+
+            // Services
+            services.AddScoped<IPermissionService, PermissionService>();
+            services.AddScoped<IRoleService, RoleService>();
+            services.AddScoped<IEmailService, BrevoEmailService>();
+            
+            return services;
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Web Layer (Interface Adapters)
+
+The Web layer handles HTTP concerns:
+
+- **Endpoints**: API route definitions
+- **Middleware**: Request/response pipeline
+- **Filters**: Cross-cutting HTTP concerns
+- **DTOs**: Request/Response models
+- **Configuration**: Dependency injection setup
+
+<Tabs>
+  <Tab title="Endpoint">
+    ```csharp
+    // src/Web/Endpoints/Permissions.cs (lines 65-68)
+    private static async Task<IResult> GetPermissions(
+        IMediator mediator, 
+        [FromQuery] bool activeOnly = false)
+    {
+        var permissions = await mediator.Send(
+            new GetPermissionsQuery { ActiveOnly = activeOnly });
+        return Results.Ok(permissions);
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Endpoint Registration">
+    ```csharp
+    // src/Web/Endpoints/Permissions.cs (lines 18-27)
+    public override void Map(WebApplication app)
+    {
+        var group = app.MapGroup(this)
+            .WithName("Permissions")
+            .WithOpenApi()
+            .RequireAuthorization("RequireAdministrator");
+
+        group.MapGet("/", GetPermissions)
+            .WithName("GetPermissions")
+            .Produces<List<PermissionDto>>(StatusCodes.Status200OK);
+        
+        // ... more endpoints
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Program.cs">
+    ```csharp
+    // src/Web/Program.cs (simplified)
+    var builder = WebApplication.CreateBuilder(args);
+
+    // Register services from each layer
+    builder.Services.AddApplicationServices();      // Application layer
+    builder.Services.AddInfrastructureServices(     // Infrastructure layer
+        builder.Configuration);
+    builder.Services.AddWebServices();              // Web layer
+
+    var app = builder.Build();
+
+    // Configure HTTP pipeline
+    app.UseHttpsRedirection();
+    app.UseAuthentication();
+    app.UseAuthorization();
+    app.MapEndpoints();                             // Register all endpoints
+
+    app.Run();
+    ```
+  </Tab>
+</Tabs>
+
+## Dependency Inversion in Action
+
+Let's see how dependency inversion works:
+
+<Steps>
+  <Step title="Application defines interface">
+    ```csharp
+    // src/Application/Common/Interfaces/IEmailService.cs
+    public interface IEmailService
+    {
+        Task SendEmailAsync(string to, string subject, string body);
+    }
+    ```
+  </Step>
+  
+  <Step title="Application uses interface">
+    ```csharp
+    // Application handler depends on IEmailService
+    public class RegisterCommandHandler
+    {
+        private readonly IEmailService _emailService;
+        
+        public RegisterCommandHandler(IEmailService emailService)
+        {
+            _emailService = emailService;
+        }
+        
+        public async Task Handle(...)
+        {
+            await _emailService.SendEmailAsync(...);
+        }
+    }
+    ```
+  </Step>
+  
+  <Step title="Infrastructure implements interface">
+    ```csharp
+    // src/Infrastructure/Services/BrevoEmailService.cs
+    public class BrevoEmailService : IEmailService
+    {
+        public async Task SendEmailAsync(string to, string subject, string body)
+        {
+            // Actual implementation using Brevo API
+        }
+    }
+    ```
+  </Step>
+  
+  <Step title="Infrastructure registers implementation">
+    ```csharp
+    // src/Infrastructure/DependencyInjection.cs
+    services.AddHttpClient<IEmailService, BrevoEmailService>();
+    ```
+  </Step>
+</Steps>
+
+<Check>
+  The Application layer doesn't know about Brevo. You could swap to SendGrid, AWS SES, or any other provider without changing application code!
+</Check>
+
+## Benefits Realized
+
+### 1. Testability
+
+```csharp
+// Test the handler with a mock email service
+[Test]
+public async Task Handle_ValidRequest_SendsEmail()
+{
+    var mockEmailService = new Mock<IEmailService>();
+    var handler = new RegisterCommandHandler(mockEmailService.Object);
+    
+    await handler.Handle(new RegisterCommand { ... });
+    
+    mockEmailService.Verify(
+        x => x.SendEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), 
+        Times.Once);
+}
+```
+
+### 2. Framework Independence
+
+The Domain and Application layers don't depend on:
+- Entity Framework
+- ASP.NET Core
+- Any specific database
+- Any external library
+
+You can swap these out without touching your business logic.
+
+### 3. Parallel Development
+
+Teams can work on different layers simultaneously:
+- Frontend team uses the Application interfaces
+- Backend team implements Infrastructure
+- Domain experts work on business logic
+
+### 4. Migration-Friendly
+
+- Migrate from SQL Server to PostgreSQL → Change Infrastructure only
+- Migrate from REST API to gRPC → Change Web layer only
+- Add GraphQL alongside REST → Add new Web endpoints
+
+## Common Pitfalls
+
+<Warning>
+  **Don't let the Domain depend on anything!**
+  
+  ❌ Wrong:
+  ```csharp
+  // Domain/Entities/User.cs
+  using Microsoft.EntityFrameworkCore; // BAD!
+  
+  public class User : BaseEntity { }
+  ```
+  
+  ✅ Correct:
+  ```csharp
+  // Domain/Entities/User.cs
+  namespace SAPFIAI.Domain.Entities;
+  
+  public class User : BaseEntity { }
+  ```
+</Warning>
+
+<Warning>
+  **Don't bypass the Application layer**
+  
+  ❌ Wrong:
+  ```csharp
+  // Web calling Infrastructure directly
+  public class PermissionsController
+  {
+      private readonly ApplicationDbContext _context; // BAD!
+  }
+  ```
+  
+  ✅ Correct:
+  ```csharp
+  // Web calling Application via MediatR
+  public class Permissions
+  {
+      private static async Task<IResult> GetPermissions(
+          IMediator mediator) // GOOD!
+      {
+          return await mediator.Send(new GetPermissionsQuery());
+      }
+  }
+  ```
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Project Structure" icon="folder-tree" href="/architecture/project-structure">
+    Explore the folder organization
+  </Card>
+  <Card title="CQRS Pattern" icon="code-branch" href="/architecture/cqrs-pattern">
+    Learn about Commands and Queries
+  </Card>
+  <Card title="Domain Entities" icon="cube" href="/architecture/clean-architecture#domain-layer">
+    Deep dive into Domain entities
+  </Card>
+  <Card title="Dependency Injection" icon="plug" href="/architecture/overview">
+    Service registration patterns
+  </Card>
+</CardGroup>

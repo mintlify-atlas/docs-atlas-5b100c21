@@ -1,0 +1,703 @@
+---
+title: Testing
+description: Comprehensive testing strategy with unit, functional, and integration tests
+---
+
+SAPFIAI includes a complete testing architecture using NUnit, FluentAssertions, and Moq. Tests are organized by scope and purpose to ensure code quality and reliability.
+
+## Testing Architecture
+
+The solution includes four test projects:
+
+```
+tests/
+├── Application.UnitTests/        # Isolated unit tests for Application layer
+├── Application.FunctionalTests/  # End-to-end API tests with database
+├── Domain.UnitTests/            # Domain logic and entity tests
+└── Infrastructure.IntegrationTests/ # Infrastructure service tests
+```
+
+### Test Types
+
+<CardGroup cols={3}>
+  <Card title="Unit Tests" icon="microscope">
+    Fast, isolated tests for business logic without external dependencies
+  </Card>
+  <Card title="Functional Tests" icon="globe">
+    End-to-end API tests with real database and HTTP requests
+  </Card>
+  <Card title="Integration Tests" icon="plug">
+    Test infrastructure components like database access and external services
+  </Card>
+</CardGroup>
+
+## Running Tests
+
+### Run All Tests
+
+```bash
+dotnet test
+```
+
+### Run Specific Test Project
+
+```bash
+# Unit tests only (fastest)
+dotnet test tests/Application.UnitTests
+
+# Functional tests only
+dotnet test tests/Application.FunctionalTests
+
+# Domain tests only
+dotnet test tests/Domain.UnitTests
+```
+
+### Run with Code Coverage
+
+```bash
+dotnet test /p:CollectCoverage=true /p:CoverageReportFormat=opencover
+```
+
+### Run Specific Test
+
+```bash
+dotnet test --filter "FullyQualifiedName~RequestLoggerTests.ShouldCallGetUserNameAsyncOnceIfAuthenticated"
+```
+
+### Verbose Output
+
+```bash
+dotnet test --verbosity normal
+```
+
+## Unit Tests
+
+Unit tests verify isolated components without external dependencies.
+
+### Test Structure
+
+Unit tests are organized to mirror the Application structure:
+
+```
+Application.UnitTests/
+├── Common/
+│   ├── Behaviours/
+│   │   └── RequestLoggerTests.cs
+│   └── Exceptions/
+│       └── ValidationExceptionTests.cs
+├── Permissions/
+├── Roles/
+└── Users/
+```
+
+### Dependencies
+
+From `tests/Application.UnitTests/Application.UnitTests.csproj`:
+
+```xml
+<ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="nunit" />
+    <PackageReference Include="NUnit.Analyzers" />
+    <PackageReference Include="NUnit3TestAdapter" />
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="FluentAssertions" />
+    <PackageReference Include="Moq" />
+</ItemGroup>
+```
+
+### Writing Unit Tests
+
+Example from `tests/Application.UnitTests/Common/Behaviours/RequestLoggerTests.cs`:
+
+```csharp
+using SAPFIAI.Application.Common.Behaviours;
+using SAPFIAI.Application.Common.Interfaces;
+using SAPFIAI.Application.Users.Commands.Login;
+using Microsoft.Extensions.Logging;
+using Moq;
+using NUnit.Framework;
+
+namespace SAPFIAI.Application.UnitTests.Common.Behaviours;
+
+public class RequestLoggerTests
+{
+    private Mock<ILogger<LoginCommand>> _logger = null!;
+    private Mock<IUser> _user = null!;
+    private Mock<IIdentityService> _identityService = null!;
+
+    [SetUp]
+    public void Setup()
+    {
+        _logger = new Mock<ILogger<LoginCommand>>();
+        _user = new Mock<IUser>();
+        _identityService = new Mock<IIdentityService>();
+    }
+
+    [Test]
+    public async Task ShouldCallGetUserNameAsyncOnceIfAuthenticated()
+    {
+        // Arrange
+        _user.Setup(x => x.Id).Returns(Guid.NewGuid().ToString());
+        var requestLogger = new LoggingBehaviour<LoginCommand>(
+            _logger.Object, 
+            _user.Object, 
+            _identityService.Object
+        );
+
+        // Act
+        await requestLogger.Process(
+            new LoginCommand { Email = "test@test.com", Password = "password" }, 
+            new CancellationToken()
+        );
+
+        // Assert
+        _identityService.Verify(
+            i => i.GetUserNameAsync(It.IsAny<string>()), 
+            Times.Once
+        );
+    }
+
+    [Test]
+    public async Task ShouldNotCallGetUserNameAsyncOnceIfUnauthenticated()
+    {
+        // Arrange
+        var requestLogger = new LoggingBehaviour<LoginCommand>(
+            _logger.Object, 
+            _user.Object, 
+            _identityService.Object
+        );
+
+        // Act
+        await requestLogger.Process(
+            new LoginCommand { Email = "test@test.com", Password = "password" }, 
+            new CancellationToken()
+        );
+
+        // Assert
+        _identityService.Verify(
+            i => i.GetUserNameAsync(It.IsAny<string>()), 
+            Times.Never
+        );
+    }
+}
+```
+
+### Unit Test Patterns
+
+<AccordionGroup>
+  <Accordion title="Arrange-Act-Assert (AAA)">
+    Structure tests in three clear sections:
+    ```csharp
+    [Test]
+    public async Task TestName()
+    {
+        // Arrange - Set up test data and mocks
+        var mock = new Mock<IService>();
+        mock.Setup(x => x.Method()).Returns(expectedValue);
+        
+        // Act - Execute the code under test
+        var result = await systemUnderTest.Execute();
+        
+        // Assert - Verify the outcome
+        result.Should().Be(expectedValue);
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Mocking with Moq">
+    Mock dependencies to isolate the unit under test:
+    ```csharp
+    // Create mock
+    var mockContext = new Mock<IApplicationDbContext>();
+    
+    // Setup method return
+    mockContext.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()))
+        .ReturnsAsync(1);
+    
+    // Verify method was called
+    mockContext.Verify(
+        x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), 
+        Times.Once
+    );
+    ```
+  </Accordion>
+
+  <Accordion title="Assertions with FluentAssertions">
+    Write readable assertions:
+    ```csharp
+    // Basic assertions
+    result.Should().NotBeNull();
+    result.Should().Be(expectedValue);
+    result.Should().BeOfType<PermissionDto>();
+    
+    // Collection assertions
+    collection.Should().HaveCount(3);
+    collection.Should().Contain(item);
+    collection.Should().BeInAscendingOrder(x => x.Name);
+    
+    // Exception assertions
+    Action act = () => sut.ThrowingMethod();
+    act.Should().Throw<ValidationException>()
+        .WithMessage("Validation failed");
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Functional Tests
+
+Functional tests verify end-to-end API behavior with a real database.
+
+### Test Infrastructure
+
+Functional tests use a custom test fixture from `tests/Application.FunctionalTests/Testing.cs`:
+
+```csharp
+using SAPFIAI.Domain.Constants;
+using SAPFIAI.Infrastructure.Data;
+using SAPFIAI.Infrastructure.Identity;
+using MediatR;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace SAPFIAI.Application.FunctionalTests;
+
+[SetUpFixture]
+public partial class Testing
+{
+    private static ITestDatabase _database;
+    private static CustomWebApplicationFactory _factory = null!;
+    private static IServiceScopeFactory _scopeFactory = null!;
+    private static string? _userId;
+
+    [OneTimeSetUp]
+    public async Task RunBeforeAnyTests()
+    {
+        _database = await TestDatabaseFactory.CreateAsync();
+        _factory = new CustomWebApplicationFactory(_database.GetConnection());
+        _scopeFactory = _factory.Services.GetRequiredService<IServiceScopeFactory>();
+    }
+
+    public static async Task<TResponse> SendAsync<TResponse>(IRequest<TResponse> request)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var mediator = scope.ServiceProvider.GetRequiredService<ISender>();
+        return await mediator.Send(request);
+    }
+
+    public static async Task<string> RunAsAdministratorAsync()
+    {
+        return await RunAsUserAsync(
+            "administrator@local", 
+            "Administrator1234!", 
+            new[] { Roles.Administrator }
+        );
+    }
+
+    public static async Task ResetState()
+    {
+        try
+        {
+            await _database.ResetAsync();
+        }
+        catch (Exception) { }
+        _userId = null;
+    }
+
+    [OneTimeTearDown]
+    public async Task RunAfterAnyTests()
+    {
+        await _database.DisposeAsync();
+        await _factory.DisposeAsync();
+    }
+}
+```
+
+### Writing Functional Tests
+
+Base test class from `tests/Application.FunctionalTests/BaseTestFixture.cs`:
+
+```csharp
+namespace SAPFIAI.Application.FunctionalTests;
+
+using static Testing;
+
+[TestFixture]
+public abstract class BaseTestFixture
+{
+    [SetUp]
+    public async Task TestSetUp()
+    {
+        await ResetState();
+    }
+}
+```
+
+Example functional test:
+
+```csharp
+using SAPFIAI.Application.Permissions.Commands.CreatePermission;
+using SAPFIAI.Application.Permissions.Queries.GetPermissions;
+using static SAPFIAI.Application.FunctionalTests.Testing;
+
+namespace SAPFIAI.Application.FunctionalTests.Permissions.Commands;
+
+public class CreatePermissionTests : BaseTestFixture
+{
+    [Test]
+    public async Task ShouldCreatePermission()
+    {
+        // Arrange
+        await RunAsAdministratorAsync();
+        var command = new CreatePermissionCommand
+        {
+            Name = "users.create",
+            Description = "Create users",
+            Module = "Users"
+        };
+
+        // Act
+        var result = await SendAsync(command);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Should().BeGreaterThan(0);
+
+        var permissions = await SendAsync(new GetPermissionsQuery());
+        permissions.Should().ContainSingle(p => p.Name == "users.create");
+    }
+
+    [Test]
+    public async Task ShouldFailWhenPermissionAlreadyExists()
+    {
+        // Arrange
+        await RunAsAdministratorAsync();
+        var command = new CreatePermissionCommand
+        {
+            Name = "users.create",
+            Description = "Create users",
+            Module = "Users"
+        };
+        await SendAsync(command);
+
+        // Act
+        var result = await SendAsync(command);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("PermissionExists");
+    }
+}
+```
+
+### Database Reset with Respawn
+
+Functional tests use [Respawn](https://github.com/jbogard/Respawn) to reset the database between tests:
+
+```xml
+<PackageReference Include="Respawn" />
+```
+
+This ensures each test runs with a clean database state without recreating the database.
+
+### Test Database Options
+
+The test suite supports multiple database providers:
+
+- **SQL Server LocalDB** - For Windows development
+- **Testcontainers** - For Linux/Docker environments
+
+From `tests/Application.FunctionalTests/Application.FunctionalTests.csproj`:
+
+```xml
+<PackageReference Include="Testcontainers.MsSql" />
+```
+
+## Integration Tests
+
+Integration tests verify Infrastructure components interact correctly with external dependencies.
+
+### Test Structure
+
+```
+Infrastructure.IntegrationTests/
+├── Data/
+│   ├── ApplicationDbContextTests.cs
+│   └── Repositories/
+└── Services/
+```
+
+### Writing Integration Tests
+
+```csharp
+using SAPFIAI.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
+using NUnit.Framework;
+using FluentAssertions;
+
+namespace SAPFIAI.Infrastructure.IntegrationTests.Data;
+
+public class ApplicationDbContextTests
+{
+    private ApplicationDbContext _context = null!;
+
+    [SetUp]
+    public void Setup()
+    {
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .Options;
+
+        _context = new ApplicationDbContext(options);
+    }
+
+    [Test]
+    public async Task ShouldSaveAndRetrieveEntity()
+    {
+        // Arrange
+        var permission = new Permission
+        {
+            Name = "test.permission",
+            Module = "Test",
+            IsActive = true
+        };
+
+        // Act
+        _context.Permissions.Add(permission);
+        await _context.SaveChangesAsync();
+
+        // Assert
+        var retrieved = await _context.Permissions
+            .FirstOrDefaultAsync(p => p.Name == "test.permission");
+        
+        retrieved.Should().NotBeNull();
+        retrieved!.Module.Should().Be("Test");
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        _context.Dispose();
+    }
+}
+```
+
+## Test Best Practices
+
+<AccordionGroup>
+  <Accordion title="Test Naming">
+    Use descriptive names that explain what is being tested:
+    ```csharp
+    // Good
+    [Test]
+    public async Task ShouldCreatePermissionWhenDataIsValid()
+    
+    [Test]
+    public async Task ShouldFailWhenPermissionAlreadyExists()
+    
+    // Avoid
+    [Test]
+    public async Task Test1()
+    ```
+  </Accordion>
+
+  <Accordion title="One Assert Per Test">
+    Focus each test on a single behavior:
+    ```csharp
+    // Good - Tests one thing
+    [Test]
+    public async Task ShouldReturnActivePermissionsOnly()
+    {
+        var result = await SendAsync(new GetPermissionsQuery { ActiveOnly = true });
+        result.Should().OnlyContain(p => p.IsActive);
+    }
+    
+    // Avoid - Tests multiple things
+    [Test]
+    public async Task ShouldWorkCorrectly()
+    {
+        // Multiple unrelated assertions
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Test Data Builders">
+    Use builders for complex test data:
+    ```csharp
+    public class PermissionBuilder
+    {
+        private string _name = "default.permission";
+        private string _module = "Default";
+        
+        public PermissionBuilder WithName(string name)
+        {
+            _name = name;
+            return this;
+        }
+        
+        public PermissionBuilder WithModule(string module)
+        {
+            _module = module;
+            return this;
+        }
+        
+        public CreatePermissionCommand Build()
+        {
+            return new CreatePermissionCommand
+            {
+                Name = _name,
+                Module = _module
+            };
+        }
+    }
+    
+    // Usage
+    var command = new PermissionBuilder()
+        .WithName("users.create")
+        .WithModule("Users")
+        .Build();
+    ```
+  </Accordion>
+
+  <Accordion title="Async Tests">
+    Always await async operations:
+    ```csharp
+    [Test]
+    public async Task ShouldExecuteAsynchronously()
+    {
+        // Correct
+        var result = await SendAsync(command);
+        
+        // Wrong - Causes test to complete before operation finishes
+        var result = SendAsync(command).Result;
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Test Coverage
+
+### Measuring Coverage
+
+Generate coverage reports:
+
+```bash
+# OpenCover format
+dotnet test /p:CollectCoverage=true /p:CoverageReportFormat=opencover
+
+# Cobertura format (for CI tools)
+dotnet test /p:CollectCoverage=true /p:CoverageReportFormat=cobertura
+
+# Multiple formats
+dotnet test /p:CollectCoverage=true /p:CoverageReportFormat="opencover,cobertura"
+```
+
+### Coverage Goals
+
+Aim for these coverage targets:
+
+- **Application Layer**: 80%+ (business logic)
+- **Domain Layer**: 90%+ (core entities and rules)
+- **Infrastructure Layer**: 60%+ (integration points)
+- **Web Layer**: 50%+ (controllers and middleware)
+
+### Viewing Coverage Reports
+
+Use [ReportGenerator](https://github.com/danielpalme/ReportGenerator) to create HTML reports:
+
+```bash
+# Install tool
+dotnet tool install -g dotnet-reportgenerator-globaltool
+
+# Generate report
+reportgenerator \
+  -reports:"**/coverage.opencover.xml" \
+  -targetdir:"coverage-report" \
+  -reporttypes:Html
+
+# Open report
+open coverage-report/index.html
+```
+
+## Continuous Integration
+
+Run tests in CI/CD pipelines:
+
+### GitHub Actions
+
+```yaml
+name: Tests
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: 8.0.x
+      
+      - name: Restore dependencies
+        run: dotnet restore
+      
+      - name: Build
+        run: dotnet build --no-restore
+      
+      - name: Test
+        run: dotnet test --no-build --verbosity normal /p:CollectCoverage=true
+```
+
+## Troubleshooting
+
+### Tests Timing Out
+
+Increase timeout for long-running tests:
+
+```csharp
+[Test, Timeout(30000)] // 30 seconds
+public async Task LongRunningTest()
+{
+    // Test code
+}
+```
+
+### Database Locks
+
+Ensure tests properly dispose of database connections:
+
+```csharp
+[TearDown]
+public async Task TearDown()
+{
+    await _context.DisposeAsync();
+}
+```
+
+### Flaky Tests
+
+Identify and fix non-deterministic behavior:
+
+```csharp
+// Bad - Time-dependent
+var result = await WaitForCondition();
+result.Should().BeTrue(); // May fail randomly
+
+// Good - Explicit waiting with timeout
+var result = await WaitForConditionAsync(timeout: TimeSpan.FromSeconds(5));
+result.Should().BeTrue();
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Creating Use Cases" icon="code" href="/development/creating-use-cases">
+    Write testable CQRS handlers
+  </Card>
+  <Card title="Configuration" icon="gear" href="/development/configuration">
+    Configure test environments
+  </Card>
+</CardGroup>
